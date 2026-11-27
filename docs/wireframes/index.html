@@ -1,0 +1,143 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Portal wireframe: so sánh</title><link rel="icon" href="../../assets/favicon.svg"><style>
+:root{--bg:#fff;--surface:#f3f4f6;--panel:#fff;--fg:#1f2937;--muted:#4b5563;--line:#d1d5db;--accent:#0f766e;--on-accent:#fff;--soft:#ccfbf1;--ink:#1f2937;--danger:#b91c1c;--warn:#92400e;--shadow:0 1px 2px rgba(0,0,0,.08)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1623;--surface:#1a2332;--panel:#151d2b;--fg:#e5e7eb;--muted:#b8c1cd;--line:#334155;--accent:#2dd4bf;--on-accent:#06302b;--soft:#134e4a;--ink:#f3f4f6;--danger:#fca5a5;--warn:#fcd34d;--shadow:none}}
+:root[data-theme=dark]{--bg:#0f1623;--surface:#1a2332;--panel:#151d2b;--fg:#e5e7eb;--muted:#b8c1cd;--line:#334155;--accent:#2dd4bf;--on-accent:#06302b;--soft:#134e4a;--ink:#f3f4f6;--danger:#fca5a5;--warn:#fcd34d;--shadow:none}
+*{box-sizing:border-box}
+::placeholder{color:var(--muted);opacity:1}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4,p{margin:0}
+ul,ol{margin:0;padding:0;list-style:none}
+.i{width:20px;height:20px;flex:none}.i.s{width:16px;height:16px}.i.l{width:28px;height:28px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+/* khung xem wireframe */
+.meta{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;padding:8px 16px;flex-wrap:wrap}
+.meta b{font-size:15px}.meta nav{display:flex;gap:4px;flex:1;overflow-x:auto}.meta nav a{white-space:nowrap}
+.meta nav a{padding:4px 10px;border-radius:999px;font-size:13px;color:var(--muted);border:1px solid var(--line)}
+.meta nav a:hover{color:var(--fg);border-color:var(--fg)}
+.wf{max-width:1280px;margin:0 auto;padding:24px 16px 8px}
+.wf>h2{font-size:15px;margin-bottom:4px}.wf>p.cap{font-size:13px;color:var(--muted);margin-bottom:10px}
+.frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg);position:relative}
+/* control */
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--fg)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.dng{color:var(--danger)}
+.btn.sm{min-height:30px;padding:3px 9px;font-size:13px}
+.ibtn{font-size:18px;display:inline-grid;place-items:center;width:36px;height:36px;border-radius:8px;border:1px solid transparent;background:none;color:var(--muted);cursor:pointer;flex:none}
+.ibtn:hover{background:var(--surface);color:var(--fg)}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+.kind{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:3px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-size:13px;cursor:pointer;white-space:nowrap}
+.chip[aria-pressed=true]{background:var(--soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:0 12px;min-height:40px;color:var(--muted)}
+.search input{flex:1;min-width:0;border:0;background:none;color:var(--fg);font:inherit;outline:none;min-height:38px}
+.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft)}
+.search kbd{font:12px monospace;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted)}
+.ico{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--soft);color:var(--accent);flex:none}
+.muted{color:var(--muted)}
+/* form */
+.form{display:grid;gap:12px}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end}
+.fld{display:grid;gap:4px;font-size:13px;font-weight:600}
+.fld>span.h{font-weight:400;color:var(--muted);font-size:12px}
+.fld input,.fld select,.fld textarea{font:inherit;font-weight:400;font-size:14px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:38px;width:100%}
+.fld textarea{min-height:64px;resize:vertical}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:14px;display:flex;gap:10px;align-items:center;color:var(--muted);font-size:13px;font-weight:400}
+.acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.err{color:var(--danger);font-size:13px;font-weight:400;display:flex;gap:6px;align-items:center}
+.okmsg{color:var(--accent);font-size:13px;font-weight:400}
+.rules{font-size:12.5px;color:var(--muted);font-weight:400;display:grid;gap:2px}
+/* tài liệu */
+.docs{position:relative}
+.file{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;font-size:14px;min-width:0}
+.file .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file small{color:var(--muted);font-size:12px}
+.file:hover{background:var(--surface)}
+.pane-d{display:none}
+#X1:checked~.viewer .p1,#X2:checked~.viewer .p2,#X3:checked~.viewer .p3{display:block}
+.vbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.vbar b{flex:1;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vscroll{background:var(--surface);padding:16px;min-height:440px;max-height:520px;overflow:auto}
+.paper{background:#fff;color:#1f2937;max-width:560px;margin:0 auto;padding:28px 32px;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.25);font-size:13.5px;line-height:1.6;font-family:Georgia,"Times New Roman",serif}
+.paper h4{font-size:17px;margin-bottom:8px;text-align:center}
+.paper p{margin-bottom:8px}.paper h5{margin:10px 0 4px;font-size:14px}
+.paper ul{list-style:disc;padding-left:20px;margin-bottom:8px}
+.pg{max-width:560px;margin:8px auto 0;text-align:center;font-size:12px;color:var(--muted)}
+.sheet{border-collapse:collapse;background:#fff;color:#1f2937;font-size:13px;min-width:460px;width:100%}
+.sheet th,.sheet td{border:1px solid #cbd5e1;padding:4px 10px;text-align:left}
+.sheet th{background:#e5e7eb;font-weight:600;text-align:center}
+.sheet td.r{text-align:right;font-variant-numeric:tabular-nums}
+.stabs{display:flex;gap:4px;margin-top:8px;font-size:12px}
+.stabs span{padding:3px 10px;border:1px solid var(--line);border-radius:6px;color:var(--muted)}
+.stabs span.on{background:var(--soft);color:var(--accent);font-weight:600;border-color:var(--accent)}
+/* note */
+.note{position:relative;display:grid;gap:0}
+.ntabs{display:none}
+.ntop{grid-area:top;display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ntop input{flex:1;min-width:160px;font:inherit;font-weight:600;font-size:16px;border:1px solid transparent;border-radius:6px;padding:4px 8px;background:none;color:var(--fg)}
+.ntop input:focus{border-color:var(--accent);outline:none}
+.ntop .st{font-size:12px;color:var(--muted)}
+.ed{grid-area:ed;min-width:0;display:flex;flex-direction:column}
+.pv{grid-area:pv;min-width:0;border-left:1px solid var(--line);padding:14px 18px;font-size:14.5px;overflow:auto;background:var(--panel)}
+.hist{grid-area:hist;min-width:0;border-left:1px solid var(--line)}
+.mdbar{display:flex;gap:2px;padding:4px 8px;border-bottom:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
+.mdbar .ibtn{width:32px;height:32px}
+.src{flex:1;margin:0;padding:12px 14px;font:13.5px/1.65 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow:auto;background:var(--panel);color:var(--fg);min-height:260px}
+.src i{font-style:normal;color:var(--accent)}
+.pv h2{font-size:20px;margin-bottom:6px}.pv h3{font-size:16px;margin:12px 0 4px}.pv p{margin-bottom:8px}.pv ul{list-style:disc;padding-left:20px;margin-bottom:8px}
+.pv code{background:var(--surface);padding:1px 5px;border-radius:4px;font-size:13px}
+.pv pre{background:var(--surface);padding:8px 10px;border-radius:8px;overflow:auto;font-size:13px;margin:0 0 8px}
+.hh{padding:10px 12px;font-weight:600;font-size:13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;align-items:center}
+.vers li{padding:9px 12px;border-bottom:1px solid var(--line);display:grid;gap:2px;font-size:13px}
+.vers li.cur{background:var(--soft)}
+.vers b{font-size:13px}.vers .w{color:var(--muted);font-size:12px}
+.vers .a{display:flex;gap:6px;margin-top:4px}
+/* trống */
+.empties{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:20px}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:20px 16px;text-align:center;display:grid;gap:8px;justify-items:center;color:var(--muted)}
+.empty>svg{width:150px;height:auto;color:var(--muted)}
+.empty h3{color:var(--fg);font-size:16px}.empty p{font-size:13.5px;max-width:30ch}
+/* đăng nhập */
+.authc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;display:grid;gap:14px;width:100%;max-width:380px}
+.authc h3{font-size:18px}
+.theme-btn{margin-left:auto}
+@media(max-width:800px){
+ .empties{grid-template-columns:1fr;padding:12px}
+ .form .two{grid-template-columns:1fr}
+ .wf{padding:16px 12px 4px}.meta{padding:8px 12px}.meta nav{flex-basis:100%;order:5}.meta>span{display:none}
+ .paper{padding:18px 16px}
+ .note .ntabs{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--line);grid-area:tabs}
+ .ntabs label{flex:1;text-align:center;padding:7px;border:1px solid var(--line);border-radius:8px;font-size:14px;cursor:pointer}
+ .note{grid-template-columns:1fr!important;grid-template-areas:"top" "tabs" "ed" "pv" "hist"!important}
+ .note .ed,.note .pv,.note .hist{display:none;border-left:0}
+ #N1:checked~.ed,#N2:checked~.pv,#N3:checked~.hist{display:flex}
+ #N2:checked~.pv,#N3:checked~.hist{display:block}
+ #N1:checked~.ntabs label[for=N1],#N2:checked~.ntabs label[for=N2],#N3:checked~.ntabs label[for=N3]{background:var(--soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+ .btn,.chip,.ibtn{min-height:40px}
+}
+
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 48px}
+.wrap>h1{font-size:24px;margin-bottom:6px}.wrap>p{max-width:70ch;margin-bottom:20px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.vc{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--panel);display:grid;gap:8px;align-content:start}
+.vc h2{font-size:20px;color:var(--accent)}.vc h3{font-size:16px}.vc h4{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:4px}
+.vc ul{list-style:disc;padding-left:20px;font-size:14px;display:grid;gap:2px}
+.vc .btn{justify-content:center;margin-top:8px}
+.mini{height:130px;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--bg)}
+.mb{display:block;background:var(--surface);border:1px solid var(--line);border-radius:4px}.mb.s{background:var(--soft);border-color:var(--accent)}
+.tw{overflow:auto;margin-top:28px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+thead th{background:var(--surface)}tbody th{background:var(--surface);font-weight:600;width:20%}
+@media(max-width:900px){.cards{grid-template-columns:1fr}}
+</style></head><body><header class="meta"><b>So sánh wireframe</b><span class="muted" style="font-size:13px">Chọn một phương án trước khi dựng</span><span style="flex:1"></span><button class="btn sm" data-theme-toggle type="button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="i s" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.750" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.500"/><path d="M12 3.500v17"/><path d="M12 3.500a8.500 8.500 0 0 1 0 17z" fill="currentColor"/></svg>
+ Sáng/Tối</button></header><main class="wrap"><h1>Ba phương án giao diện portal</h1><p class="muted">Mỗi phương án là một file tĩnh gồm đủ màn: trang chủ, trạng thái trống, quản trị topic, xem tài liệu, soạn note, đăng nhập. Dữ liệu mẫu trung tính. Bấm Sáng/Tối để xem hai giao diện; co cửa sổ lại để xem điện thoại.</p><div class="cards"><article class="vc"><div class="mini" aria-hidden="true"><div style="display:grid;grid-template-columns:28% 1fr;gap:4px;height:100%"><div class="mb s"></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px"><i class="mb"></i><i class="mb"></i><i class="mb"></i><i class="mb"></i><i class="mb"></i><i class="mb"></i></div></div></div><h2>Phương án A</h2><h3>Sidebar topic + lưới thẻ</h3><p class="muted">Quen thuộc như trình quản lý tệp: chọn topic bên trái, thẻ to bên phải.</p><h4>Ưu</h4><ul><li>Dễ hiểu ngay, không cần học</li><li>Thẻ to dễ bấm trên điện thoại</li><li>Thấy cây topic lồng nhau</li></ul><h4>Nhược</h4><ul><li>Chỉ thấy một topic mỗi lúc</li><li>Lưới thẻ tốn chỗ, điện thoại chỉ thấy khoảng 3 thẻ mỗi màn</li><li>Muốn mở tool hay dùng vẫn phải chọn topic trước</li></ul><a class="btn pri" href="A.html">Mở phương án A</a></article><article class="vc"><div class="mini" aria-hidden="true"><div style="display:grid;grid-template-rows:14% 10px 1fr;gap:4px;height:100%"><div style="display:flex;gap:4px"><i class="mb s" style="flex:1"></i><i class="mb s" style="flex:1"></i><i class="mb s" style="flex:1"></i></div><div></div><div style="display:grid;gap:3px"><i class="mb"></i><i class="mb"></i><i class="mb"></i><i class="mb"></i><i class="mb"></i></div></div></div><h2>Phương án B</h2><h3>Tab topic ngang + danh sách dày</h3><p class="muted">Giống thanh tab trình duyệt, mỗi mục một dòng, cả dòng là vùng bấm.</p><h4>Ưu</h4><ul><li>Nhiều mục nhất trên màn điện thoại</li><li>Quét mắt nhanh, có cột loại, đích, thẻ</li><li>Quản trị đơn giản (sửa tên ngay trong dòng)</li></ul><h4>Nhược</h4><ul><li>Nhiều topic thì tab cuộn ngang, khó thấy hết</li><li>Trông "kỹ thuật", ít điểm nhấn</li><li>Không có chỗ riêng cho mục hay dùng</li></ul><a class="btn pri" href="B.html">Mở phương án B</a></article><article class="vc"><div class="mini" aria-hidden="true"><div style="display:grid;grid-template-columns:10% 1fr;gap:4px;height:100%"><div class="mb s"></div><div style="display:grid;grid-template-rows:18% 24% 1fr;gap:4px"><i class="mb"></i><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px"><i class="mb s"></i><i class="mb s"></i><i class="mb s"></i><i class="mb s"></i></div><div style="display:grid;grid-template-columns:5fr 7fr;gap:4px"><i class="mb"></i><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px"><i class="mb"></i><i class="mb"></i><i class="mb"></i><i class="mb"></i></div></div></div></div></div><h2>Phương án C</h2><h3>Bảng điều khiển: ghim + gần đây + topic</h3><p class="muted">Trang chủ trả lời "hôm nay mở gì": ghim, gần đây, tóm tắt từng topic.</p><h4>Ưu</h4><ul><li>Một lần bấm tới tool hay dùng (Ghim)</li><li>Tìm kiếm lớn, nổi bật, hợp ý "tìm nhanh"</li><li>Thấy tổng quan nhiều topic một lượt</li></ul><h4>Nhược</h4><ul><li>Dựng nhiều nhất: cần thêm ghim, lịch sử mở</li><li>Nhiều khối, trên điện thoại phải cuộn dài</li><li>Quản trị kiểu cột kéo thả phức tạp hơn</li></ul><a class="btn pri" href="C.html">Mở phương án C</a></article></div><div class="tw"><table><caption class="sr">So sánh ba phương án</caption><thead><tr><th></th><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><th scope="row">Bấm tới tool</th><td>Chọn topic rồi bấm thẻ (2 bước)</td><td>Chọn tab rồi bấm dòng (2 bước)</td><td>Bấm Ghim (1 bước), hoặc tìm</td></tr><tr><th scope="row">Mật độ mục / màn hình</th><td>Máy tính khoảng 9 thẻ, điện thoại khoảng 3 thẻ</td><td>Máy tính khoảng 10 dòng, điện thoại khoảng 8 dòng</td><td>Máy tính: 4 ghim + 6 gần đây + 4 topic; điện thoại phải cuộn dài</td></tr><tr><th scope="row">Điện thoại</th><td>Chip topic + thẻ xếp dọc</td><td>Tab cuộn ngang + danh sách (tốt nhất cho điện thoại)</td><td>Thanh đáy + khối xếp dọc, dài</td></tr><tr><th scope="row">Quản trị topic</th><td>Bảng + panel form</td><td>Sửa tại dòng, trang dọc</td><td>Cột kéo thả + hộp thoại</td></tr><tr><th scope="row">Công dựng</th><td>Thấp</td><td>Thấp nhất</td><td>Cao nhất (cần ghim, gần đây)</td></tr></tbody></table></div></main><script>
+(function(){var r=document.documentElement;try{var t=localStorage.getItem('wf-theme');if(t)r.dataset.theme=t}catch(e){}
+document.addEventListener('click',function(e){var b=e.target.closest('[data-theme-toggle]');if(!b)return;
+var dark=r.dataset.theme?r.dataset.theme=='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+r.dataset.theme=dark?'light':'dark';try{localStorage.setItem('wf-theme',r.dataset.theme)}catch(e){}})})();
+</script></body></html>
