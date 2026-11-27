@@ -93,11 +93,13 @@ export async function serveIcon(req: Request, kind: IconKind, id: string): Promi
     : await prisma.topic.findUnique({ where: { id }, select });
   if (!row?.iconImage || !row.iconMime || !row.iconUpdatedAt) throw notFound("Không có ảnh biểu tượng.");
   const etag = `"icon-${row.iconUpdatedAt.getTime()}"`;
+  const versioned = new URL(req.url).searchParams.get("v") === String(row.iconUpdatedAt.getTime());
   const headers = new Headers({
     "Content-Type": row.iconMime,
     "X-Content-Type-Options": "nosniff",
-    // Ảnh bất biến theo ?v=<iconUpdatedAt>; "private": chỉ cache trình duyệt, không cache dùng chung.
-    "Cache-Control": "private, max-age=86400, immutable",
+    // Chỉ khi URL mang đúng ?v=<iconUpdatedAt> thì ảnh bất biến (cache 1 ngày); không có/lệch ?v= thì phải revalidate
+    // bằng ETag để không thấy ảnh cũ sau khi đổi. "private": chỉ cache trình duyệt, không cache dùng chung.
+    "Cache-Control": versioned ? "private, max-age=86400, immutable" : "private, no-cache",
     // CSP là CSP DUY NHẤT của route (next.config không đặt CSP cho đường dẫn này, xem ADR 0003/0004).
     "Content-Security-Policy": ICON_CSP,
     "Cross-Origin-Resource-Policy": "same-origin",

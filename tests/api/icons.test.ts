@@ -62,7 +62,13 @@ describe.each(["item", "topic"] as const)("ảnh biểu tượng của %s", (k) 
     expect(Buffer.from(await g.arrayBuffer()).equals(PNG)).toBe(true);
     expect(g.headers.get("content-type")).toBe("image/png");
     expect(g.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(g.headers.get("cache-control")).toBe("private, max-age=86400, immutable");
+    // Không có ?v= → phải revalidate bằng ETag; có ?v= khớp → bất biến (L1 của review).
+    expect(g.headers.get("cache-control")).toBe("private, no-cache");
+    const gv = await call(H[k].get, dto.iconImageUrl as string, { cookie: s.cookie, params: { id: H[k].id() } });
+    expect(gv.status).toBe(200);
+    expect(gv.headers.get("cache-control")).toBe("private, max-age=86400, immutable");
+    const gOld = await call(H[k].get, `/api/${H[k].base}/${H[k].id()}/icon?v=1`, { cookie: s.cookie, params: { id: H[k].id() } });
+    expect(gOld.headers.get("cache-control")).toBe("private, no-cache");
     expect(g.headers.get("content-security-policy")).toMatch(/default-src 'none'.*sandbox/);
     expect(g.headers.get("content-length")).toBe(String(PNG.length));
     expect(await prisma.auditLog.count({ where: { action: `${k}.icon_set`, entityId: H[k].id() } })).toBeGreaterThanOrEqual(1);

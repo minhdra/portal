@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readImageSize, MAX_SOURCE_PIXELS } from "@/lib/icon-image";
 import { safeDecode } from "@/lib/safe-decode";
 import { sanitizeNext } from "@/lib/safe-next";
 import { Semaphore } from "@/server/lib/semaphore";
@@ -141,5 +142,29 @@ describe("next.config headers (F7)", () => {
     const re = new RegExp("^" + generic.source.replace(/^\//, "/") + "$");
     for (const p of ["/api/items/abc/icon", "/api/topics/abc/icon", "/api/files/x"]) expect(re.test(p), p).toBe(false);
     for (const p of ["/", "/items/abc", "/topic/abc", "/api/items/abc", "/api/items/abc/files", "/api/items/abc/icon/x"]) expect(re.test(p), p).toBe(true);
+  });
+});
+
+describe("readImageSize (chặn pixel bomb ở client)", () => {
+  const png = (w: number, h: number) => {
+    const b = new Uint8Array(33);
+    b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+    new DataView(b.buffer).setUint32(16, w); new DataView(b.buffer).setUint32(20, h);
+    return b;
+  };
+  it("PNG: đọc đúng kích thước, 20000x20000 vượt trần", () => {
+    expect(readImageSize(png(64, 32))).toEqual({ w: 64, h: 32 });
+    const big = readImageSize(png(20000, 20000))!;
+    expect(big.w * big.h).toBeGreaterThan(MAX_SOURCE_PIXELS);
+  });
+  it("GIF/JPEG/WebP đọc được, rác trả null", () => {
+    const gif = new Uint8Array(13); gif.set([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x40, 0x01, 0xf0, 0x00]);
+    expect(readImageSize(gif)).toEqual({ w: 320, h: 240 });
+    const jpg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0x01, 0xe0, 0x02, 0x80, 3, 0, 0, 0]);
+    expect(readImageSize(jpg)).toEqual({ w: 640, h: 480 });
+    const webp = new Uint8Array(30);
+    webp.set([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58, 0, 0, 0, 0, 0, 0, 0, 0, 0x7f, 0, 0, 0x3f, 0, 0]);
+    expect(readImageSize(webp)).toEqual({ w: 128, h: 64 });
+    expect(readImageSize(new Uint8Array([1, 2, 3, 4, 5]))).toBeNull();
   });
 });
