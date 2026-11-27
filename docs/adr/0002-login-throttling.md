@@ -25,3 +25,10 @@ Backoff theo username áp cho mọi IP, trừ IP đã có phiên. Người lạ 
 ## Hệ quả
 - Test hồi quy: `tests/api/hardening.test.ts` (200 request song song, backoff theo username, kind tách riêng, cookie thiết bị quen, TRUST_PROXY tắt, 429 của cổng argon2) và `tests/unit/pure.test.ts` (clientIp, IPv6 /64, cảnh báo khởi động).
 - Bảng `login_attempt` vẫn do job dọn 24 giờ; lượt 429 không ghi hàng nên lũ request bị từ chối không phình bảng.
+
+## Bổ sung 27/11/2026: IP riêng/NAT cũng coi là "chung"
+Sau khi domain đi qua modem → router (proxy) → gateway, mọi truy cập đo được từ trong LAN (cả hairpin) hiện ra là `192.168.1.1`.
+Chưa xác định được IP khách từ Internet có giữ nguyên qua modem hay bị SNAT (cần thử từ mạng ngoài, vd 4G). Để chắc chắn không bao giờ
+thành khoá toàn cục, IP riêng/loopback/link-local (`isSharedIp` trong `src/server/lib/ip.ts`) được đối xử như `unknown`: bỏ khoá cứng
+theo IP và theo cặp, chỉ còn backoff theo username (và cookie thiết bị quen). Đánh đổi: người ở sau NAT chung chỉ bị giới hạn bởi backoff
+theo username (vẫn ≈ 1 lần/phút sau 10 lần sai).

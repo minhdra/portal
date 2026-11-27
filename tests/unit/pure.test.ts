@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { isSharedIp } from "@/server/lib/ip";
 import { readImageSize, MAX_SOURCE_PIXELS } from "@/lib/icon-image";
 import { safeDecode } from "@/lib/safe-decode";
 import { sanitizeNext } from "@/lib/safe-next";
@@ -166,5 +167,16 @@ describe("readImageSize (chặn pixel bomb ở client)", () => {
     webp.set([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58, 0, 0, 0, 0, 0, 0, 0, 0, 0x7f, 0, 0, 0x3f, 0, 0]);
     expect(readImageSize(webp)).toEqual({ w: 128, h: 64 });
     expect(readImageSize(new Uint8Array([1, 2, 3, 4, 5]))).toBeNull();
+  });
+});
+
+describe("isSharedIp (IP che bởi NAT/hairpin: không khoá cứng theo IP)", () => {
+  it("riêng/loopback/unknown là chung; công cộng thì không", () => {
+    for (const ip of ["unknown", "192.168.1.1", "192.168.10.1", "10.0.0.5", "172.16.0.1", "172.31.255.1", "127.0.0.1", "169.254.1.1", "100.64.0.1", "fd00::", "fe80::", "::1"]) {
+      expect(isSharedIp(ip), ip).toBe(true);
+    }
+    for (const ip of ["27.72.153.88", "8.8.8.8", "203.0.113.9", "172.32.0.1", "172.15.0.1", "100.128.0.1", "2001:db8::", "2a00:1450::"]) {
+      expect(isSharedIp(ip), ip).toBe(false);
+    }
   });
 });

@@ -40,3 +40,21 @@ export function normalizeClientIp(raw: string): string | null {
   while (prefix.length && prefix[prefix.length - 1] === 0) prefix.pop();
   return `${prefix.map((x) => x.toString(16)).join(":")}::`;
 }
+
+/**
+ * IP không định danh được một khách riêng: "unknown" hoặc địa chỉ riêng/loopback/link-local (RFC1918, 127/8, 169.254/16,
+ * 100.64/10, fc00::/7, fe80::/10, ::1). Sau NAT/hairpin của router, nhiều khách thật cùng hiện ra một địa chỉ như vậy
+ * (vd modem 192.168.1.1), nên khoá cứng theo IP/cặp sẽ thành khoá toàn cục. Với các IP này chỉ dùng backoff theo username.
+ */
+export function isSharedIp(ip: string): boolean {
+  if (ip === "unknown" || ip === "" || ip === "::" || ip === "::1") return true;
+  const m = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(ip);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    return a === 10 || a === 127 || a === 0 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+      || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+  }
+  const h = ip.toLowerCase();
+  return /^f[cd][0-9a-f]{2}:/.test(h) || /^fe[89ab][0-9a-f]:/.test(h);
+}

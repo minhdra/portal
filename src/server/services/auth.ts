@@ -3,6 +3,7 @@ import argon2 from "argon2";
 import { prisma } from "../db";
 import { SESSION_ABSOLUTE_TTL_MS, SESSION_TTL_MS, cookieSecurePinned, deviceSecret, sessionCookieName } from "../env";
 import { ApiError } from "../errors";
+import { isSharedIp } from "../lib/ip";
 import { Semaphore } from "../lib/semaphore";
 import { newToken, sha256Hex, truncate } from "../lib/util";
 
@@ -77,9 +78,10 @@ export async function reserveAttempt(
 ): Promise<bigint> {
   const u = clip(username);
   const i = clip(ip);
-  // IP không xác định (TRUST_PROXY tắt/header hỏng): mọi người dùng chung một khoá. Khoá cứng theo IP/cặp khi đó là khoá
-  // toàn cục (30 lần sai của bất kỳ ai khoá cả site), nên bỏ; chỉ còn backoff theo username và không miễn theo IP phiên.
-  const unknownIp = i === "unknown";
+  // IP không xác định (TRUST_PROXY tắt/header hỏng) hoặc là địa chỉ riêng (NAT/hairpin của router che IP khách, vd modem
+  // 192.168.1.1): nhiều người dùng chung một khoá. Khoá cứng theo IP/cặp khi đó là khoá toàn cục (30 lần sai của bất kỳ ai
+  // khoá cả site), nên bỏ; chỉ còn backoff theo username và không miễn theo IP phiên. Xem ADR 0002.
+  const unknownIp = isSharedIp(i);
   const locks = [`login:${kind}:u:${u}`, `login:ip:${i}`].sort(); // thứ tự cố định tránh deadlock
   return prisma.$transaction(
     async (tx) => {

@@ -24,7 +24,7 @@ export async function call(h: Handler, path: string, o: CallOpts = {}): Promise<
   const method = o.method ?? "GET";
   const url = new URL(path, ORIGIN);
   for (const [k, v] of Object.entries(o.query ?? {})) url.searchParams.set(k, v);
-  const headers = new Headers({ host: "portal.test", "x-client-ip": o.ip ?? "10.0.0.1", ...o.headers });
+  const headers = new Headers({ host: "portal.test", "x-client-ip": o.ip ?? "198.51.100.1", ...o.headers });
   if (o.origin !== null && method !== "GET" && method !== "HEAD") headers.set("origin", o.origin ?? ORIGIN);
   if (o.cookie) headers.set("cookie", o.cookie);
   let body: BodyInit | undefined;
@@ -46,7 +46,8 @@ export async function jsonOf<T = any>(r: Response): Promise<T> {
 
 export const rnd = (n = 6) => randomBytes(n).toString("hex");
 const ipCounter = { n: 0 };
-export const freshIp = () => `10.${(Date.now() >> 8) & 255}.${ipCounter.n++ % 250}.${Math.floor(Math.random() * 250)}`;
+// IP CÔNG CỘNG (dải TEST-NET-2/3): IP riêng bị coi là "chung" (isSharedIp) nên không có khoá cứng theo IP.
+export const freshIp = () => `${Math.random() < 0.5 ? "198.51.100" : "203.0.113"}.${(ipCounter.n++ % 250) + 1}`;
 
 export async function makeUser(opts: { mustChange?: boolean; role?: "admin" | "user" } = {}) {
   const username = `t${rnd(6)}`;

@@ -7,7 +7,7 @@ proxy_set_header X-Forwarded-Proto https;
 proxy_set_header Forwarded "";
 proxy_set_header X-Middleware-Subrequest "";
 # GHI ĐÈ, không append: header client gửi (X-Forwarded-For, X-Client-IP, X-Real-IP) không bao giờ tới upstream.
-# $remote_addr đã qua real_ip (CF-Connecting-IP khi đứng sau Cloudflare tunnel).
+# $remote_addr đã qua real_ip (phần tử cuối của X-Forwarded-For do proxy router 192.168.10.1 gắn).
 proxy_set_header X-Forwarded-For $remote_addr;
 proxy_set_header X-Client-IP $remote_addr;
 proxy_set_header X-Real-IP $remote_addr;
