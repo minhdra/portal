@@ -118,6 +118,8 @@ model Item {
   icon        String?
   status      ItemStatus @default(active)
   sortOrder   Int        @default(0) @map("sort_order")
+  pinned       Boolean    @default(false)
+  lastOpenedAt DateTime?  @map("last_opened_at") @db.Timestamptz(6)
   createdById String?    @map("created_by_id") @db.Uuid
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
