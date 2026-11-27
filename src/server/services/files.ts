@@ -173,6 +173,11 @@ function contentDisposition(kind: "inline" | "attachment", name: string): string
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name).replace(/['()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase())}`;
 }
 
+export const FILE_CSP = {
+  pdf: "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'",
+  other: "sandbox; frame-ancestors 'self'",
+} as const;
+
 export async function serveFile(req: Request, id: string, forceDownload: boolean): Promise<Response> {
   const f = await getFile(id);
   const full = resolveKey(f.storageKey);
@@ -188,7 +193,9 @@ export async function serveFile(req: Request, id: string, forceDownload: boolean
     "Content-Disposition": contentDisposition(inline ? "inline" : "attachment", f.originalName),
     "X-Content-Type-Options": "nosniff",
     // Trình xem PDF của Chrome không chạy trong sandbox CSP; PDF không phải HTML nên dùng default-src 'none'.
-    "Content-Security-Policy": f.mime === "application/pdf" ? "default-src 'none'; style-src 'unsafe-inline'" : "sandbox",
+    // frame-ancestors 'self': trang portal nhúng được tệp trong iframe cùng origin (CSP ở đây là CSP DUY NHẤT: next.config
+    // không đặt CSP cho /api/files vì sẽ ghi đè header này). Xem docs/adr/0003-security-hardening.md.
+    "Content-Security-Policy": FILE_CSP[f.mime === "application/pdf" ? "pdf" : "other"],
     "Cross-Origin-Resource-Policy": "same-origin",
     "Cache-Control": "private, max-age=0, must-revalidate",
     "Accept-Ranges": "bytes",

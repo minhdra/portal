@@ -1,0 +1,131 @@
+# Dựng bằng: docker compose up -d   (cần .env, xem docs/DEPLOY.md)
+name: portal
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+
+services:
+  postgres:
+    <<: *hardening
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: portal
+      POSTGRES_DB: portal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD trong .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # postgres cần chown/gosu lúc khởi động
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portal -d portal"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [portal]
+    # KHÔNG publish cổng ra host.
+
+  migrate:
+    <<: *hardening
+    build: { context: ., target: migrate }
+    image: portal-migrate:latest
+    restart: "no"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://portal:${POSTGRES_PASSWORD}@postgres:5432/portal
+    depends_on:
+      postgres: { condition: service_healthy }
+    read_only: true
+    tmpfs: ["/tmp", "/home/node/.npm"]
+    networks: [portal]
+
+  portal:
+    <<: *hardening
+    build: { context: ., target: runner }
+    image: portal-app:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://portal:${POSTGRES_PASSWORD}@postgres:5432/portal
+      NODE_ENV: production
+      UPLOAD_DIR: /data/uploads
+      UV_THREADPOOL_SIZE: "8"
+      TRUST_PROXY: "1"
+      CLIENT_IP_HEADER: x-client-ip
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    volumes:
+      - uploads:/data/uploads
+    read_only: true
+    tmpfs: ["/tmp"]
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 512
+    networks: [portal]
+    # KHÔNG publish cổng; chỉ gateway tới được (portal:3100).
+
+  gateway:
+    <<: *hardening
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    # nginx master cần các quyền này để chown thư mục tạm, hạ quyền worker, bind :80
+    cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-18790}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./nginx/portal.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/proxy_headers.inc:/etc/nginx/proxy_headers.inc:ro
+      - ./nginx/conf.d/tools:/etc/nginx/conf.d/tools:ro
+    depends_on:
+      portal: { condition: service_healthy }
+    read_only: true
+    tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
+    mem_limit: 256m
+    cpus: 1
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/nginx-health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    networks: [portal, edge]
+
+  backup:
+    <<: *hardening
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # chạy bằng uid của chủ thư mục BACKUP_DIR (mặc định 1000, trùng user node của portal để đọc uploads)
+    user: "${BACKUP_UID:-1000}:${BACKUP_GID:-1000}"
+    # uploads do portal (uid/gid 1000) tạo với mode 0750/0640: đọc được nhờ nhóm 1000 dù BACKUP_UID khác
+    group_add: ["1000"]
+    entrypoint: ["/bin/sh", "/scripts/backup.sh", "--loop"]
+    environment:
+      PGHOST: postgres
+      PGUSER: portal
+      PGDATABASE: portal
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_DIR: /backups
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      IN_BACKUP_CONTAINER: "1"
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+      - uploads:/data/uploads:ro
+      - ./scripts:/scripts:ro   # thư mục (không phải 1 file) để sửa script trên host thì container thấy ngay
+    depends_on:
+      postgres: { condition: service_healthy }
+    read_only: true
+    tmpfs: ["/tmp"]
+    mem_limit: 256m
+    networks: [portal]
+
+networks:
+  portal:
+    internal: true   # portal/postgres/backup không ra Internet, không với tới từ host
+  edge: {}           # gateway: publish 127.0.0.1 và tới host.docker.internal
+
+volumes:
+  pgdata: {}
+  uploads: {}

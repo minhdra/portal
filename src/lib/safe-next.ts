@@ -11,7 +11,10 @@ export function sanitizeNext(n: string | null | undefined, origin: string): stri
   try {
     const u = new URL(n, origin);
     if (u.origin !== origin) return "/";
-    return u.pathname + u.search + u.hash;
+    const out = u.pathname + u.search + u.hash;
+    // Chuẩn hoá "."/".." có thể làm lộ "//host" (vd "/.//evil.com"): kiểm tra lại kết quả.
+    if (!/^\/(?![/\\])/.test(out)) return "/";
+    return out;
   } catch {
     return "/";
   }

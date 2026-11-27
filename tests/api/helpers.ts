@@ -21,7 +21,7 @@ export async function call(h: Handler, path: string, o: CallOpts = {}): Promise<
   const method = o.method ?? "GET";
   const url = new URL(path, ORIGIN);
   for (const [k, v] of Object.entries(o.query ?? {})) url.searchParams.set(k, v);
-  const headers = new Headers({ host: "portal.test", "x-forwarded-for": o.ip ?? "10.0.0.1", ...o.headers });
+  const headers = new Headers({ host: "portal.test", "x-client-ip": o.ip ?? "10.0.0.1", ...o.headers });
   if (o.origin !== null && method !== "GET" && method !== "HEAD") headers.set("origin", o.origin ?? ORIGIN);
   if (o.cookie) headers.set("cookie", o.cookie);
   let body: BodyInit | undefined;

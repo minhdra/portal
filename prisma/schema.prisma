@@ -84,7 +84,6 @@ model LoginAttempt {
   success   Boolean
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  @@index([username, createdAt])
   @@index([kind, username, createdAt])
   @@index([ip, createdAt])
   @@index([createdAt])
@@ -182,7 +181,6 @@ model File {
   uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@unique([itemId, sha256])
-  @@index([itemId])
   @@index([sha256])
   @@map("file")
 }

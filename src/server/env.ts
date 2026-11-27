@@ -12,8 +12,17 @@ export const sessionCookieName = (): string => (cookieSecurePinned() ? "__Host-p
 
 /** TRUST_PROXY=1: tin header IP do proxy tin cậy (gateway) đặt. Mặc định tắt. */
 export const trustProxy = (): boolean => process.env.TRUST_PROXY === "1";
-/** Header chứa IP khách khi TRUST_PROXY=1 (mặc định x-forwarded-for; Cloudflare: cf-connecting-ip). */
-export const clientIpHeader = (): string => (process.env.CLIENT_IP_HEADER?.trim() || "x-forwarded-for").toLowerCase();
+/**
+ * Header chứa IP khách khi TRUST_PROXY=1. Mặc định `x-client-ip` (gateway nginx đặt `X-Client-IP $remote_addr`, ghi đè).
+ * Tuỳ chọn khác: `cf-connecting-ip`, `x-forwarded-for` (lấy phần tử cuối).
+ */
+export const clientIpHeader = (): string => (process.env.CLIENT_IP_HEADER?.trim() || "x-client-ip").toLowerCase();
+
+/** Khoá HMAC cho cookie "thiết bị quen". Thiếu hoặc ngắn hơn 32 ký tự -> tính năng tắt (không cấp, không chấp nhận). */
+export const deviceSecret = (): string | null => {
+  const s = process.env.SESSION_SECRET ?? "";
+  return s.length >= 32 ? s : null;
+};
 
 export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 export const SESSION_ABSOLUTE_TTL_MS = 60 * 24 * 60 * 60 * 1000;

@@ -1,8 +1,8 @@
-import { isIP } from "node:net";
 import { ZodError, type ZodType } from "zod";
 import { Prisma } from "../../prisma/generated/client";
 import { clientIpHeader, cookieSecurePinned, trustProxy } from "./env";
 import { ApiError, invalid } from "./errors";
+import { normalizeClientIp } from "./lib/ip";
 import { loadSession, type SessionUser } from "./services/auth";
 
 export interface Ctx {
@@ -27,14 +27,18 @@ type Mode = "required" | "none" | "allowMustChange";
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
- * IP khách. TRUST_PROXY tắt: không tin header nào (Request của route handler không lộ IP socket) -> "unknown".
- * TRUST_PROXY=1: lấy phần tử ĐẦU của CLIENT_IP_HEADER (mặc định X-Forwarded-For; proxy phải ghi đè header
- * này bằng $remote_addr / dùng cf-connecting-ip). Giá trị không phải địa chỉ IP -> "unknown".
+ * IP khách (khoá giới hạn tần suất). TRUST_PROXY tắt: không tin header nào (Request của route handler không lộ IP
+ * socket) -> "unknown". TRUST_PROXY=1: đọc CLIENT_IP_HEADER (mặc định `x-client-ip`, do gateway ĐẶT/ghi đè bằng
+ * $remote_addr sau real_ip_header CF-Connecting-IP; portal không publish cổng nên chỉ gateway chạm được) và tin nguyên
+ * giá trị đó. `x-forwarded-for` lấy phần tử CUỐI (phần do proxy gần nhất thêm). Giá trị không phải IP hợp lệ
+ * (kể cả nhiều giá trị ghép bằng dấu phẩy ở header khác) -> "unknown". IPv6 chuẩn hoá về /64. Xem ADR 0002.
  */
 export function clientIp(req: Request): string {
   if (!trustProxy()) return "unknown";
-  const first = req.headers.get(clientIpHeader())?.split(",")[0]?.trim();
-  return first && isIP(first) ? first : "unknown";
+  const name = clientIpHeader();
+  let v = req.headers.get(name);
+  if (v && name === "x-forwarded-for") v = v.split(",").pop() ?? null;
+  return (v && normalizeClientIp(v)) || "unknown";
 }
 
 /** Secure: ghim bởi COOKIE_SECURE=1/production; ngoài ra (dev) theo X-Forwarded-Proto hoặc scheme URL. */

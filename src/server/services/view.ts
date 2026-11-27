@@ -11,14 +11,21 @@ import { resolveKey } from "./storage";
 export const VIEW_MAX_BYTES = 10 * 1024 * 1024;
 export const MAX_ZIP_ENTRIES = 5000;
 export const MAX_ZIP_UNCOMPRESSED = 50 * 1024 * 1024;
-export const MAX_VIEW_HTML = 8 * 1024 * 1024;
+// F6: lọc HTML chạy trong worker (sanitize-html bậc hai theo độ sâu lồng thẻ: không được chạy ở luồng chính). Trần 2 MB cho
+// HTML từ mammoth để giới hạn bộ nhớ/JSON/DOM phía trình duyệt; vượt -> 413. Xem ADR 0003.
+export const MAX_VIEW_HTML = 2 * 1024 * 1024;
 export const VIEW_TIMEOUT_MS = 10_000;
 const MAX_ROWS = 2000;
 const MAX_COLS = 500;
+// F5: 2000x500 ô x 2000 ký tự/ô x tối đa 50 sheet có thể lên tới hàng chục GB sau khi cắt từng ô; ngân sách TỔNG ký tự và số ô đếm trong worker
+// trước khi map/postMessage. Hết ngân sách -> cắt phần còn lại và đặt truncated.
+export const MAX_XLSX_CHARS = 2 * 1024 * 1024;
+export const MAX_XLSX_CELLS = MAX_ROWS * MAX_COLS; // tổng mọi sheet; ô trống đệm (read-excel-file đệm mọi dòng bằng độ rộng lớn nhất) cũng tính
+const MAX_SHEETS = 50;
 
 // Giữ mammoth/read-excel-file trong đồ thị import để Next (output: standalone) chép chúng vào bản đóng gói;
 // worker nạp lại bằng require từ process.cwd().
-export const __viewDeps = { mammoth, readXlsx };
+export const __viewDeps = { mammoth, readXlsx, sanitizeHtml };
 
 /**
  * Lọc nhanh bằng central directory (rẻ, chạy ở luồng chính): số mục + tổng kích thước KHAI BÁO.
@@ -47,16 +54,29 @@ export function assertZipSane(buf: Uint8Array): void {
 }
 
 /**
- * Mã chạy trong worker_threads (eval, CommonJS). Làm 3 việc, đều có trần:
+ * Mã chạy trong worker_threads (eval, CommonJS). Làm 4 việc, đều có trần:
  *  1. giải nén THẬT từng mục zip với maxOutputLength (không tin kích thước khai báo) -> too_large nếu > trần;
  *  2. mammoth (docx) hoặc read-excel-file (xlsx);
- *  3. cắt dòng/cột/ô trước khi gửi về.
+ *  3. cắt dòng/cột/ô/tổng ký tự (xlsx) trước khi gửi về;
+ *  4. lọc HTML docx bằng sanitize-html.
  * Trả về qua postMessage: {ok:true, result} | {ok:false, code}.
  */
 export const VIEW_WORKER_SOURCE = String.raw`
 const { parentPort, workerData: W } = require("node:worker_threads");
 const zlib = require("node:zlib");
 const { createRequire } = require("node:module");
+const SANITIZE = {
+  allowedTags: ["p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "strong", "em", "b", "i", "u", "s", "sub", "sup",
+    "blockquote", "pre", "code", "table", "thead", "tbody", "tfoot", "tr", "td", "th", "a", "img", "span"],
+  // rel/target do transformTags thêm vào: cho phép sau khi biến đổi.
+  allowedAttributes: { a: ["href", "title", "rel", "target"], img: ["src", "alt"], td: ["colspan", "rowspan"], th: ["colspan", "rowspan"] },
+  allowedSchemes: ["http", "https", "mailto"],
+  allowedSchemesByTag: { img: ["data"] },
+  allowProtocolRelative: false,
+  disallowedTagsMode: "discard",
+  transformTags: { a: (tag, attribs) => ({ tagName: tag, attribs: { ...attribs, rel: "noopener noreferrer nofollow", target: "_blank" } }) },
+  exclusiveFilter: (f) => f.tag === "img" && !/^data:image\/(png|jpe?g|gif);base64,/i.test(f.attribs.src || ""),
+};
 const fail = (code) => { const e = new Error(code); e.viewCode = code; return e; };
 function guard(b) {
   let eocd = -1;
@@ -89,22 +109,45 @@ const cell = (v) => {
 };
 (async () => {
   try {
+    const req = createRequire(W.base);
+    if (W.kind === "sanitize") {
+      if (W.html.length > W.maxHtml) throw fail("too_large");
+      return parentPort.postMessage({ ok: true, result: { kind: "html", html: req("sanitize-html")(W.html, SANITIZE) } });
+    }
     const buf = Buffer.from(W.buf.buffer, W.buf.byteOffset, W.buf.byteLength);
     guard(buf);
-    const req = createRequire(W.base);
     if (W.kind === "docx") {
       const r = await req("mammoth").convertToHtml({ buffer: buf });
       if (r.value.length > W.maxHtml) throw fail("too_large");
-      parentPort.postMessage({ ok: true, result: { kind: "html", html: r.value } });
+      // sanitize-html có thể bậc hai theo độ sâu lồng thẻ (2 MB <span> lồng: hàng chục giây): chạy ở đây, dưới timeout + terminate.
+      parentPort.postMessage({ ok: true, result: { kind: "html", html: req("sanitize-html")(r.value, SANITIZE) } });
     } else {
       const mod = req("read-excel-file/node");
       const read = typeof mod === "function" ? mod : mod.default;
       const sheets = await read(buf);
-      parentPort.postMessage({ ok: true, result: { kind: "sheets", sheets: sheets.map((s) => {
-        const data = s.data, width = data.reduce((m, r) => Math.max(m, r.length), 0);
-        return { name: String(s.sheet).slice(0, 100), truncated: data.length > W.maxRows || width > W.maxCols,
-          rows: data.slice(0, W.maxRows).map((r) => r.slice(0, W.maxCols).map(cell)) };
-      }) } });
+      let chars = W.maxChars, cells = W.maxCells;
+      const out = [];
+      for (const s of sheets.slice(0, W.maxSheets)) {
+        const data = s.data;
+        let width = 0;
+        for (const r of data) if (r.length > width) width = r.length;
+        let truncated = data.length > W.maxRows || width > W.maxCols;
+        const rows = [];
+        if (chars > 0 && cells > 0) {
+          scan: for (const r of data.slice(0, W.maxRows)) {
+            const row = [];
+            for (const v of r.slice(0, W.maxCols)) {
+              const t = cell(v);
+              if (--cells < 0 || (chars -= t.length) < 0) { truncated = true; break scan; }
+              row.push(t);
+            }
+            rows.push(row);
+          }
+        } else truncated = true;
+        out.push({ name: String(s.sheet).slice(0, 100), truncated, rows });
+      }
+      if (sheets.length > W.maxSheets) out[out.length - 1].truncated = true;
+      parentPort.postMessage({ ok: true, result: { kind: "sheets", sheets: out } });
     }
   } catch (e) {
     parentPort.postMessage({ ok: false, code: (e && e.viewCode) || "parse_failed" });
@@ -164,25 +207,9 @@ export function runViewWorker(data: Record<string, unknown>, o: WorkerOpts = {})
   );
 }
 
-const SANITIZE: sanitizeHtml.IOptions = {
-  allowedTags: [
-    "p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "strong", "em", "b", "i", "u", "s", "sub", "sup",
-    "blockquote", "pre", "code", "table", "thead", "tbody", "tfoot", "tr", "td", "th", "a", "img", "span",
-  ],
-  allowedAttributes: { a: ["href", "title"], img: ["src", "alt"], td: ["colspan", "rowspan"], th: ["colspan", "rowspan"] },
-  allowedSchemes: ["http", "https", "mailto"],
-  allowedSchemesByTag: { img: ["data"] },
-  allowProtocolRelative: false,
-  disallowedTagsMode: "discard",
-  transformTags: {
-    a: (tag, attribs) => ({ tagName: tag, attribs: { ...attribs, rel: "noopener noreferrer nofollow", target: "_blank" } }),
-  },
-  exclusiveFilter: (f) => f.tag === "img" && !/^data:image\/(png|jpe?g|gif);base64,/i.test(f.attribs.src ?? ""),
-};
-// 'rel'/'target' do transformTags thêm vào: cho phép sau khi biến đổi.
-SANITIZE.allowedAttributes = { ...(SANITIZE.allowedAttributes as object), a: ["href", "title", "rel", "target"] };
-
-export const sanitizeDocHtml = (html: string): string => sanitizeHtml(html, SANITIZE);
+/** Lọc HTML trong worker (cùng trần heap/timeout). Dùng cho test; viewFile đã lọc sẵn trong worker. */
+export const sanitizeDocHtml = async (html: string): Promise<string> =>
+  ((await runViewWorker({ kind: "sanitize", html, base: `${process.cwd()}/noop.js`, maxHtml: MAX_VIEW_HTML })) as { html: string }).html;
 
 export async function viewFile(id: string) {
   const f = await getFile(id);
@@ -205,6 +232,9 @@ export async function viewFile(id: string) {
     maxHtml: MAX_VIEW_HTML,
     maxRows: MAX_ROWS,
     maxCols: MAX_COLS,
+    maxChars: MAX_XLSX_CHARS,
+    maxCells: MAX_XLSX_CELLS,
+    maxSheets: MAX_SHEETS,
   })) as { kind: "html"; html: string } | { kind: "sheets"; sheets: { name: string; rows: string[][]; truncated: boolean }[] };
-  return r.kind === "html" ? { kind: "html" as const, html: sanitizeDocHtml(r.html) } : r;
+  return r;
 }

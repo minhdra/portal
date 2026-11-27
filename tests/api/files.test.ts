@@ -132,7 +132,7 @@ describe("tải file", () => {
     expect(r.status).toBe(200);
     expect(r.headers.get("content-type")).toBe("image/png");
     expect(r.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(r.headers.get("content-security-policy")).toBe("sandbox");
+    expect(r.headers.get("content-security-policy")).toBe("sandbox; frame-ancestors 'self'");
     expect(r.headers.get("content-disposition")).toMatch(/^inline;/);
     expect(r.headers.get("accept-ranges")).toBe("bytes");
     expect(Buffer.from(await r.arrayBuffer()).length).toBe(PNG.length + 5);
@@ -239,10 +239,10 @@ describe("view docx / xlsx", () => {
     expect((await v("00000000-0000-4000-8000-000000000000")).status).toBe(404);
   });
 
-  it("lọc HTML: bỏ script/style/on*/javascript:, giữ thẻ an toàn", () => {
+  it("lọc HTML (trong worker): bỏ script/style/on*/javascript:, giữ thẻ an toàn", async () => {
     const dirty = `<p onclick="x()">a<script>alert(1)</script><style>p{}</style></p><a href="javascript:alert(1)">j</a><a href="https://ok.example/">ok</a>` +
       `<img src="javascript:alert(1)"><img src="x" onerror="e()"><img src="data:image/svg+xml;base64,PHN2Zz4="><img src="data:image/png;base64,AAAA" alt="i"><iframe src="//e"></iframe><table><tr><td colspan="2">c</td></tr></table>`;
-    const out = sanitizeDocHtml(dirty);
+    const out = await sanitizeDocHtml(dirty);
     expect(out).not.toMatch(/script|alert|onclick|onerror|javascript:|<style|iframe|svg/i);
     expect(out).toContain("https://ok.example/");
     expect(out).toContain("rel=\"noopener noreferrer nofollow\"");

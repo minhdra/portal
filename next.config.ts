@@ -35,8 +35,21 @@ const common = [
 const config: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
-  // mammoth/read-excel-file được nạp trong worker_threads bằng require từ node_modules: không đóng gói vào bundle.
-  serverExternalPackages: ["mammoth", "read-excel-file"],
+  // mammoth/read-excel-file/sanitize-html được nạp trong worker_threads bằng require từ node_modules: không đóng gói vào bundle.
+  serverExternalPackages: ["mammoth", "read-excel-file", "sanitize-html"],
+  // Worker nạp các gói này bằng require() (điểm vào CJS) còn Next chỉ vết theo import tĩnh (điểm vào ESM), nên bản standalone
+  // thiếu tệp .cjs (vd read-excel-file/node/index.cjs). Ép chép trọn gói + phụ thuộc trực tiếp của read-excel-file.
+  outputFileTracingIncludes: {
+    "/api/files/\\[id\\]/view": [
+      "./node_modules/read-excel-file/**/*",
+      "./node_modules/saxen/**/*",
+      "./node_modules/unzipper-esm/**/*",
+      "./node_modules/worker-f/**/*",
+      "./node_modules/fflate/**/*",
+      "./node_modules/mammoth/**/*",
+      "./node_modules/sanitize-html/**/*",
+    ],
+  },
   async headers() {
     return [
       // Mọi đường dẫn trừ /api/files/*: CSP đầy đủ, không cho nhúng khung.
@@ -48,15 +61,12 @@ const config: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
         ],
       },
-      // /api/files/*: route tự đặt CSP riêng (sandbox / default-src 'none' cho PDF) và giữ nguyên;
-      // ở đây chỉ thêm frame-ancestors 'self' để trang portal nhúng được PDF trong iframe cùng origin.
+      // /api/files/*: KHÔNG đặt Content-Security-Policy ở đây. Header từ next.config GHI ĐÈ header của route (đã kiểm bằng
+      // curl -I trên bản standalone), nên CSP (sandbox / default-src 'none' + frame-ancestors 'self') nằm hết trong
+      // serveFile (src/server/services/files.ts). Ở đây chỉ thêm các header chung và X-Frame-Options: SAMEORIGIN.
       {
         source: "/api/files/:path*",
-        headers: [
-          ...common,
-          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
-        ],
+        headers: [...common, { key: "X-Frame-Options", value: "SAMEORIGIN" }],
       },
     ];
   },
