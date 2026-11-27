@@ -12,6 +12,8 @@ fi
 
 DIR="${BACKUP_DIR:-/backups}"
 KEEP="${BACKUP_KEEP:-14}"
+case "$KEEP" in ''|*[!0-9]*) echo "LỖI: BACKUP_KEEP phải là số nguyên >= 1 (đang: '$KEEP')" >&2; exit 1 ;; esac
+[ "$KEEP" -ge 1 ] || { echo "LỖI: BACKUP_KEEP phải >= 1 (0 sẽ xoá hết bản sao lưu)" >&2; exit 1; }
 UPLOADS="${UPLOAD_DIR:-/data/uploads}"
 
 run_once() {

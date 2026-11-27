@@ -9,8 +9,12 @@ if [ "${SKIP_PULL:-0}" = 1 ] || [ ! -d .git ]; then echo "(bỏ qua git pull)"; 
 
 ./scripts/backup.sh || echo "CẢNH BÁO: backup thất bại/không chạy (backup container chưa lên?)" >&2
 
+# Tên ảnh theo tên project (khớp `${COMPOSE_PROJECT_NAME:-portal}` trong docker-compose.yml; đọc cả từ .env)
+PROJ="${COMPOSE_PROJECT_NAME:-$(grep -E '^COMPOSE_PROJECT_NAME=' .env | tail -n1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//' || true)}"
+PROJ="${PROJ:-portal}"
+
 # Giữ ảnh hiện tại làm điểm quay lui
-for img in portal-app portal-migrate; do
+for img in "$PROJ-app" "$PROJ-migrate"; do
   if docker image inspect "$img:latest" >/dev/null 2>&1; then docker tag "$img:latest" "$img:rollback"; fi
 done
 
@@ -34,9 +38,9 @@ if healthy; then
   exit 0
 fi
 
-echo "Health FAIL -> rollback ảnh portal-app:rollback" >&2
-if docker image inspect portal-app:rollback >/dev/null 2>&1; then
-  docker tag portal-app:rollback portal-app:latest
+echo "Health FAIL -> rollback ảnh $PROJ-app:rollback" >&2
+if docker image inspect "$PROJ-app:rollback" >/dev/null 2>&1; then
+  docker tag "$PROJ-app:rollback" "$PROJ-app:latest"
   docker compose up -d --no-build --no-deps portal
   if healthy; then
     # gateway chưa được tạo/khởi động khi up -d thất bại: dựng nốt toàn bộ stack bằng ảnh cũ

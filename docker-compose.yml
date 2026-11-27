@@ -4,16 +4,23 @@ name: portal
 x-hardening: &hardening
   security_opt: ["no-new-privileges:true"]
   cap_drop: ["ALL"]
+  init: true
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
 
 services:
   postgres:
     <<: *hardening
-    image: postgres:16-alpine
+    # 16.15-alpine (digest = ảnh đã kiểm thử). Nâng cấp: đổi cả tag lẫn digest, xem docs/DEPLOY.md mục "Ghim ảnh".
+    image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     restart: unless-stopped
     environment:
       POSTGRES_USER: portal
       POSTGRES_DB: portal
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD trong .env}
+    mem_limit: 1g
+    pids_limit: 256
     volumes:
       - pgdata:/var/lib/postgresql/data
     # postgres cần chown/gosu lúc khởi động
@@ -29,11 +36,13 @@ services:
   migrate:
     <<: *hardening
     build: { context: ., target: migrate }
-    image: portal-migrate:latest
+    image: ${COMPOSE_PROJECT_NAME:-portal}-migrate:latest
     restart: "no"
-    env_file: .env
+    # Chỉ các biến migrate+seed cần (không env_file: tránh lộ SESSION_SECRET, BACKUP_*...).
     environment:
-      DATABASE_URL: postgresql://portal:${POSTGRES_PASSWORD}@postgres:5432/portal
+      DATABASE_URL: postgresql://portal:${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD trong .env}@postgres:5432/portal
+      ADMIN_USER: ${ADMIN_USER:?đặt ADMIN_USER trong .env}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?đặt ADMIN_INITIAL_PASSWORD trong .env}
     depends_on:
       postgres: { condition: service_healthy }
     read_only: true
@@ -43,11 +52,14 @@ services:
   portal:
     <<: *hardening
     build: { context: ., target: runner }
-    image: portal-app:latest
+    image: ${COMPOSE_PROJECT_NAME:-portal}-app:latest
     restart: unless-stopped
-    env_file: .env
+    # Chỉ biến thật sự đọc trong src/ (grep process.env). Không có POSTGRES_PASSWORD (ngoài DATABASE_URL),
+    # ADMIN_INITIAL_PASSWORD, BACKUP_*.
     environment:
-      DATABASE_URL: postgresql://portal:${POSTGRES_PASSWORD}@postgres:5432/portal
+      DATABASE_URL: postgresql://portal:${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD trong .env}@postgres:5432/portal
+      SESSION_SECRET: ${SESSION_SECRET:?đặt SESSION_SECRET trong .env}
+      COOKIE_SECURE: "1"
       NODE_ENV: production
       UPLOAD_DIR: /data/uploads
       UV_THREADPOOL_SIZE: "8"
@@ -67,7 +79,8 @@ services:
 
   gateway:
     <<: *hardening
-    image: nginx:1.27-alpine
+    # 1.27.5-alpine (digest = ảnh đã kiểm thử). Xem docs/DEPLOY.md mục "Ghim ảnh".
+    image: nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
     restart: unless-stopped
     # nginx master cần các quyền này để chown thư mục tạm, hạ quyền worker, bind :80
     cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
@@ -94,7 +107,7 @@ services:
 
   backup:
     <<: *hardening
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     restart: unless-stopped
     # chạy bằng uid của chủ thư mục BACKUP_DIR (mặc định 1000, trùng user node của portal để đọc uploads)
     user: "${BACKUP_UID:-1000}:${BACKUP_GID:-1000}"
@@ -105,7 +118,10 @@ services:
       PGHOST: postgres
       PGUSER: portal
       PGDATABASE: portal
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      # RỦI RO CÒN LẠI: mật khẩu DB nằm trong env của backup (thấy qua `docker inspect`/docker group). Compose không cho
+      # secret từ biến môi trường vào service read_only ("`file` is the sole supported option"); dùng secret dạng file
+      # cần thêm bước tạo tệp mật khẩu ngoài .env. Chấp nhận: người đọc được inspect đã có quyền docker (= root host).
+      PGPASSWORD: ${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD trong .env}
       BACKUP_DIR: /backups
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
       BACKUP_HOUR: ${BACKUP_HOUR:-3}
@@ -119,12 +135,20 @@ services:
     read_only: true
     tmpfs: ["/tmp"]
     mem_limit: 256m
+    pids_limit: 128
     networks: [portal]
 
 networks:
   portal:
     internal: true   # portal/postgres/backup không ra Internet, không với tới từ host
-  edge: {}           # gateway: publish 127.0.0.1 và tới host.docker.internal
+  # gateway: publish 127.0.0.1 và tới host.docker.internal. Subnet GHIM cứng để nginx chỉ tin CF-Connecting-IP từ
+  # gateway của chính subnet này (10.213.77.1, nơi kết nối từ host/cloudflared đi vào). Đổi dải => sửa
+  # set_real_ip_from + allow trong nginx/portal.conf. Dải này không trùng mạng docker/route đang có (kiểm lúc viết).
+  edge:
+    ipam:
+      config:
+        - subnet: 10.213.77.0/24
+          gateway: 10.213.77.1
 
 volumes:
   pgdata: {}

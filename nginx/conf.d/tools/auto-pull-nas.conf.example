@@ -2,6 +2,8 @@
 #
 # CẢNH BÁO: frontend auto-pull-nas hiện CHƯA có base path /auto-pull-nas/ (asset gọi /assets/... từ gốc).
 # Khối này chỉ chạy đúng SAU KHI PR base path của repo auto-pull-nas được merge và deploy. Bật sớm sẽ ra trang trắng.
+# CẢNH BÁO AN NINH: khi bật, /auto-pull-nas/ KHÔNG đi qua xác thực của portal (gateway chỉ proxy thẳng tới 18780);
+# ai tới được gateway (qua tunnel) đều dùng được auto-pull-nas. Chỉ bật khi chấp nhận điều đó hoặc đã có xác thực riêng.
 # Đích: web của auto-pull-nas đang publish 18780 trên host; gateway tới qua host.docker.internal (extra_hosts).
 location /auto-pull-nas/ {
     proxy_pass http://host.docker.internal:18780/;   # dấu / cuối: cắt tiền tố /auto-pull-nas/

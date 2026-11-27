@@ -1,8 +1,7 @@
 # Không đưa secret, dữ liệu, build cũ vào ngữ cảnh build
 .git
 .gitignore
-.env
-.env.*
+**/.env*
 !.env.example
 node_modules
 .next
