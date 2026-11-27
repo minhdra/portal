@@ -26,3 +26,6 @@ Trạng thái: đề xuất (wave 1). Nguồn: `docs/SPEC.md`.
 - Validate URL bằng `new URL()` khi ghi và khi render; UI mặc định "lưu trữ" (`status=archived`) thay vì xoá cứng item.
 - Đổi mật khẩu hoặc đăng xuất: xoá session của user. Job dọn `session` và `login_attempt` cũ. Xoá blob trong UPLOAD_DIR khi xoá item.
 - Role chạy migrate phải là owner của DB (cần `CREATE EXTENSION unaccent`).
+
+## Phân quyền: `role` chưa được kiểm ở server (ghi nhận 28/11/2026)
+`user.role` (`admin|user`) có trong DB và trong `/api/auth/me` nhưng **không có route nào kiểm nó**: mọi người dùng đã đăng nhập đều làm được mọi thao tác (tạo/sửa/xoá topic, item, file, note). Hiện chỉ có một tài khoản admin do seed tạo nên chưa là lỗ hổng. **Trước khi thêm người dùng thường** (bằng bất kỳ đường nào) phải thêm kiểm quyền ở server (ví dụ tham số `requireRole` trong `route()` và sở hữu theo `created_by_id`) cùng test từ chối; ẩn nút ở UI không đủ.

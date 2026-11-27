@@ -2,6 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { ApiError, api, messageOf } from "@/lib/api-client";
+import { sanitizeNext } from "@/lib/safe-next";
 import { Icon, Illustration, Logo } from "./icons/Icon";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -22,7 +23,6 @@ function Shell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-const nextPath = (n: string | null) => (n && /^\/(?![/\\])/.test(n) ? n : "/");
 
 export function LoginForm() {
   const router = useRouter();
@@ -40,7 +40,7 @@ export function LoginForm() {
     setBusy(true); setErr("");
     try {
       const r = await api.login(u.trim(), p);
-      router.replace(r.user.mustChangePassword ? "/change-password" : nextPath(sp.get("next")));
+      router.replace(r.user.mustChangePassword ? "/change-password" : sanitizeNext(sp.get("next"), location.origin));
     } catch (e2) {
       setErr(e2 instanceof ApiError && e2.status === 401 ? "Sai tên đăng nhập hoặc mật khẩu." : messageOf(e2));
       setBusy(false);

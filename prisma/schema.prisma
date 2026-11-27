@@ -65,6 +65,8 @@ model Session {
   lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
   ip         String?
   userAgent  String?  @map("user_agent")
+  // Hạn tuyệt đối (60 ngày từ lúc tạo): gia hạn trượt không vượt qua mốc này.
+  absoluteExpiresAt DateTime @default(dbgenerated("(now() + '60 days'::interval)")) @map("absolute_expires_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -77,11 +79,13 @@ model Session {
 model LoginAttempt {
   id        BigInt   @id @default(autoincrement())
   username  String // đã lowercase; có thể là tên không tồn tại
+  kind      String   @default("login") // login | cp (đổi mật khẩu); CHECK trong migration
   ip        String
   success   Boolean
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([username, createdAt])
+  @@index([kind, username, createdAt])
   @@index([ip, createdAt])
   @@index([createdAt])
   @@map("login_attempt")
@@ -177,6 +181,7 @@ model File {
   item       Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
   uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
+  @@unique([itemId, sha256])
   @@index([itemId])
   @@index([sha256])
   @@map("file")

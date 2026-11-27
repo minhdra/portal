@@ -3,7 +3,7 @@ import { prisma } from "@/server/db";
 import { ApiError, invalid } from "@/server/errors";
 import { noContent, route } from "@/server/http";
 import { audit } from "@/server/services/audit";
-import { assertNotRateLimited, hashPassword, recordAttempt, verifyPassword } from "@/server/services/auth";
+import { finishAttempt, hashPassword, reserveAttempt, verifyPassword } from "@/server/services/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,20 +14,18 @@ const Body = z.object({
 
 export const POST = route("allowMustChange", async (c) => {
   const b = await c.body(Body, 4096);
-  // Chống dò mật khẩu hiện tại bằng phiên bị đánh cắp: dùng chung bộ đếm với login (khoá riêng "cp:").
-  const key = `cp:${c.user.username}`;
-  await assertNotRateLimited(key, c.ip);
+  // Chống dò mật khẩu hiện tại bằng phiên bị đánh cắp: bộ đếm riêng (kind = "cp"), đặt chỗ trước khi verify.
+  await reserveAttempt("cp", c.user.username, c.ip);
 
   const row = await prisma.user.findUnique({ where: { id: c.user.id } });
   const ok = await verifyPassword(row?.passwordHash ?? null, b.currentPassword);
   if (!row || !ok) {
-    await recordAttempt(key, c.ip, false);
     throw new ApiError("validation", "Mật khẩu hiện tại không đúng.", { fields: { currentPassword: "Không đúng" } });
   }
   if (b.newPassword === b.currentPassword) {
     throw invalid("Mật khẩu mới phải khác mật khẩu hiện tại.", { newPassword: "Phải khác mật khẩu hiện tại" });
   }
-  await recordAttempt(key, c.ip, true);
+  await finishAttempt("cp", c.user.username, c.ip);
   const passwordHash = await hashPassword(b.newPassword);
   await prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id: row.id }, data: { passwordHash, mustChangePassword: false } });

@@ -2,6 +2,7 @@ import { fileTypeFromBuffer } from "file-type";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import { Readable } from "node:stream";
+import { Prisma } from "../../../prisma/generated/client";
 import { prisma } from "../db";
 import { MAX_UPLOAD_BYTES } from "../env";
 import { ApiError, invalid, notFound } from "../errors";
@@ -80,33 +81,45 @@ export async function saveUploads(
   ip: string,
 ): Promise<(FileDto & { duplicate?: boolean })[]> {
   await requireItem(itemId);
-  const out: (FileDto & { duplicate?: boolean })[] = [];
+  // Pha 1: kiểm tra TOÀN BỘ lô (rỗng/size/mime) trước khi ghi bất kỳ blob nào: một tệp hỏng không để lại tệp mồ côi.
+  const prepared: { data: Uint8Array; name: string; mime: string; sha256: string }[] = [];
   for (const f of files) {
     if (f.data.byteLength === 0) throw invalid(`Tệp "${f.name}" rỗng.`, { file: "Tệp rỗng" });
     if (f.data.byteLength > MAX_UPLOAD_BYTES) throw new ApiError("payload_too_large", `Tệp "${f.name}" vượt quá 50 MB.`);
     const name = sanitizeFilename(f.name);
     const mime = await detectMime(f.data, name);
     if (!mime) throw new ApiError("unsupported_media_type", `Loại tệp "${name}" không được hỗ trợ.`);
-    const sha256 = sha256Hex(f.data);
-
+    prepared.push({ data: f.data, name, mime, sha256: sha256Hex(f.data) });
+  }
+  // Pha 2: ghi.
+  const out: (FileDto & { duplicate?: boolean })[] = [];
+  for (const { data, name, mime, sha256 } of prepared) {
     const dup = await prisma.file.findFirst({ where: { itemId, sha256 } });
     if (dup) {
       out.push({ ...toFileDto(dup), duplicate: true });
       continue;
     }
     const storageKey = newStorageKey();
-    await writeBlob(storageKey, f.data);
+    await writeBlob(storageKey, data);
     try {
       const row = await prisma.$transaction(async (tx) => {
         const r = await tx.file.create({
-          data: { itemId, storageKey, originalName: name, mime, size: BigInt(f.data.byteLength), sha256, uploadedById: actorId },
+          data: { itemId, storageKey, originalName: name, mime, size: BigInt(data.byteLength), sha256, uploadedById: actorId },
         });
-        await audit(actorId, "file.upload", "file", r.id, { itemId, name, mime, size: f.data.byteLength }, ip, tx);
+        await audit(actorId, "file.upload", "file", r.id, { itemId, name, mime, size: data.byteLength }, ip, tx);
         return r;
       });
       out.push(toFileDto(row));
     } catch (e) {
       await removeBlobs([storageKey]);
+      // Đua với upload cùng nội dung: unique (item_id, sha256) -> trả bản đã có như trường hợp trùng thường.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const existing = await prisma.file.findFirst({ where: { itemId, sha256 } });
+        if (existing) {
+          out.push({ ...toFileDto(existing), duplicate: true });
+          continue;
+        }
+      }
       throw e;
     }
   }

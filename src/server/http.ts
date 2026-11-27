@@ -1,5 +1,7 @@
+import { isIP } from "node:net";
 import { ZodError, type ZodType } from "zod";
 import { Prisma } from "../../prisma/generated/client";
+import { clientIpHeader, cookieSecurePinned, trustProxy } from "./env";
 import { ApiError, invalid } from "./errors";
 import { loadSession, type SessionUser } from "./services/auth";
 
@@ -24,17 +26,20 @@ type Mode = "required" | "none" | "allowMustChange";
 
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
-/** IP khách: mục ngoài cùng bên phải của X-Forwarded-For (do proxy tin cậy thêm), rồi X-Real-IP. */
+/**
+ * IP khách. TRUST_PROXY tắt: không tin header nào (Request của route handler không lộ IP socket) -> "unknown".
+ * TRUST_PROXY=1: lấy phần tử ĐẦU của CLIENT_IP_HEADER (mặc định X-Forwarded-For; proxy phải ghi đè header
+ * này bằng $remote_addr / dùng cf-connecting-ip). Giá trị không phải địa chỉ IP -> "unknown".
+ */
 export function clientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
-    if (parts.length) return parts[parts.length - 1]!.slice(0, 64);
-  }
-  return (req.headers.get("x-real-ip") ?? "unknown").slice(0, 64);
+  if (!trustProxy()) return "unknown";
+  const first = req.headers.get(clientIpHeader())?.split(",")[0]?.trim();
+  return first && isIP(first) ? first : "unknown";
 }
 
+/** Secure: ghim bởi COOKIE_SECURE=1/production; ngoài ra (dev) theo X-Forwarded-Proto hoặc scheme URL. */
 export function isSecureRequest(req: Request): boolean {
+  if (cookieSecurePinned()) return true;
   const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
   if (proto) return proto === "https";
   try {

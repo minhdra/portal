@@ -4,6 +4,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import { fileUrl } from "@/lib/api-client";
+import { safeDecode } from "@/lib/safe-decode";
 
 // Bộ lọc mặc định của rehype-sanitize: bỏ script, on*, javascript:, style.
 const remark = [remarkGfm];
@@ -18,7 +19,7 @@ const components: Components = {
     const s = typeof src === "string" ? src : "";
     const m = s.match(/^\/api\/files\/([^/?#]+)/);
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={m ? fileUrl(decodeURIComponent(m[1])) : s} alt={alt ?? ""} loading="lazy" />;
+    return <img src={m ? fileUrl(safeDecode(m[1])) : s} alt={alt ?? ""} loading="lazy" />;
   },
 };
 

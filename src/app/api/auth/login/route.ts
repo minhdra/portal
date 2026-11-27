@@ -4,7 +4,7 @@ import { ApiError, invalid } from "@/server/errors";
 import { isSecureRequest, json, route } from "@/server/http";
 import { audit } from "@/server/services/audit";
 import {
-  assertNotRateLimited, createSession, recordAttempt, sessionCookie, toUserDto, verifyPassword,
+  createSession, finishAttempt, reserveAttempt, sessionCookie, toUserDto, verifyPassword,
 } from "@/server/services/auth";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,8 @@ export const POST = route("none", async (c) => {
   const username = b.username.trim().toLowerCase();
   if (!username) throw invalid("Thiếu tên đăng nhập.", { username: "Bắt buộc" });
 
-  await assertNotRateLimited(username, c.ip);
+  // Đặt chỗ lần thử TRƯỚC khi verify: nếu verify thất bại/ngắt giữa chừng thì lần thử vẫn được tính.
+  await reserveAttempt("login", username, c.ip);
 
   const user = await prisma.user.findUnique({ where: { username } });
   const active = user && user.isActive ? user : null;
@@ -24,12 +25,11 @@ export const POST = route("none", async (c) => {
   const ok = await verifyPassword(active?.passwordHash ?? null, b.password);
 
   if (!active || !ok) {
-    await recordAttempt(username, c.ip, false);
     await audit(active?.id ?? null, "auth.login_failed", "user", active?.id ?? null, { username: username.slice(0, 64) }, c.ip);
     throw new ApiError("unauthenticated", "Tên đăng nhập hoặc mật khẩu không đúng.");
   }
 
-  await recordAttempt(username, c.ip, true);
+  await finishAttempt("login", username, c.ip);
   const s = await createSession(active.id, c.ip, c.req.headers.get("user-agent"));
   await audit(active.id, "auth.login", "user", active.id, null, c.ip);
   return json(

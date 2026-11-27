@@ -6,6 +6,8 @@ import { audit } from "./audit";
 import { ensureNote } from "./items";
 
 export const MAX_NOTE_CHARS = 1_000_000;
+/** Giữ tối đa chừng này phiên bản mỗi note; vượt thì xoá bản cũ nhất (ADR 0003). */
+export const MAX_NOTE_VERSIONS = 200;
 
 async function noteItem(tx: Tx, itemId: string) {
   if (!isUuid(itemId)) throw notFound("Không tìm thấy ghi chú.");
@@ -39,6 +41,8 @@ async function writeVersion(tx: Tx, itemId: string, markdown: string, baseVersio
   }
   const version = rows[0]!.current_version;
   await tx.noteVersion.create({ data: { noteId: note.id, version, bodyMd: markdown, createdById: actorId } });
+  // Cắt lịch sử: giữ MAX_NOTE_VERSIONS bản mới nhất (version tăng đơn điệu nên so với version hiện tại).
+  await tx.noteVersion.deleteMany({ where: { noteId: note.id, version: { lte: version - MAX_NOTE_VERSIONS } } });
   return version;
 }
 

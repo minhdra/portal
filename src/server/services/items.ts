@@ -114,20 +114,19 @@ async function nextSort(tx: Tx, topicId: string | null): Promise<number> {
   return (m._max.sortOrder ?? 0) + 10;
 }
 
-/** Tạo note (v1) nếu item loại note chưa có. Trả note. */
+/**
+ * Tạo note (v1) nếu item loại note chưa có. Trả note. INSERT ... ON CONFLICT DO NOTHING (không ném lỗi, không làm
+ * hỏng giao dịch khi hai request cùng tạo), rồi SELECT. Chỉ ghi khi note chưa tồn tại.
+ */
 export async function ensureNote(tx: Tx, itemId: string, authorId: string | null) {
   const existing = await tx.note.findUnique({ where: { itemId } });
   if (existing) return existing;
-  try {
-    const note = await tx.note.create({ data: { itemId, bodyMd: "", currentVersion: 1 } });
-    await tx.noteVersion.create({ data: { noteId: note.id, version: 1, bodyMd: "", createdById: authorId } });
-    return note;
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return tx.note.findUniqueOrThrow({ where: { itemId } });
-    }
-    throw e;
-  }
+  const ins = await tx.$queryRaw<{ id: string }[]>`
+    INSERT INTO note (item_id, body_md, current_version, updated_at) VALUES (${itemId}::uuid, '', 1, now())
+    ON CONFLICT (item_id) DO NOTHING RETURNING id`;
+  const note = await tx.note.findUniqueOrThrow({ where: { itemId } });
+  if (ins.length > 0) await tx.noteVersion.create({ data: { noteId: note.id, version: 1, bodyMd: "", createdById: authorId } });
+  return note;
 }
 
 export async function createItem(input: ItemInput, actorId: string, ip: string): Promise<ItemDto> {
@@ -214,8 +213,12 @@ export async function markOpened(id: string): Promise<void> {
 export async function reorderItems(topicId: string | null, ids: string[], actorId: string, ip: string): Promise<void> {
   if (new Set(ids).size !== ids.length) throw invalid("Danh sách có mã trùng.", { ids: "Trùng lặp" });
   await prisma.$transaction(async (tx) => {
-    const n = await tx.item.count({ where: { id: { in: ids }, topicId } });
-    if (n !== ids.length) throw invalid("Có mục không thuộc chủ đề này.", { ids: "Không cùng chủ đề" });
+    // ids phải là ĐÚNG tập mục (chưa lưu trữ) của chủ đề: thiếu/thừa -> 422, tránh thứ tự lệch âm thầm.
+    const siblings = await tx.item.findMany({ where: { topicId, status: { not: "archived" } }, select: { id: true } });
+    const have = new Set(siblings.map((r) => r.id));
+    if (have.size !== ids.length || ids.some((id) => !have.has(id))) {
+      throw invalid("Danh sách phải gồm đúng tất cả mục của chủ đề này (không thiếu, không thừa).", { ids: "Không khớp tập mục của chủ đề" });
+    }
     if (ids.length) {
       const orders = ids.map((_, i) => (i + 1) * 10);
       await tx.$executeRaw`

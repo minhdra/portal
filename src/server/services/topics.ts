@@ -194,8 +194,12 @@ export async function reorderTopics(parentId: string | null, ids: string[], acto
   if (new Set(ids).size !== ids.length) throw invalid("Danh sách có mã trùng.", { ids: "Trùng lặp" });
   await prisma.$transaction(async (tx) => {
     await lockTree(tx);
-    const n = await tx.topic.count({ where: { id: { in: ids }, parentId } });
-    if (n !== ids.length) throw invalid("Có chủ đề không thuộc cùng chủ đề cha.", { ids: "Không cùng cha" });
+    // ids phải là ĐÚNG tập chủ đề con của parentId: thiếu/thừa -> 422.
+    const siblings = await tx.topic.findMany({ where: { parentId }, select: { id: true } });
+    const have = new Set(siblings.map((r) => r.id));
+    if (have.size !== ids.length || ids.some((id) => !have.has(id))) {
+      throw invalid("Danh sách phải gồm đúng tất cả chủ đề cùng cha (không thiếu, không thừa).", { ids: "Không khớp tập chủ đề cùng cha" });
+    }
     if (ids.length) {
       const orders = ids.map((_, i) => (i + 1) * 10);
       await tx.$executeRaw`
