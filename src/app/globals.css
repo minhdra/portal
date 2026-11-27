@@ -36,6 +36,21 @@ button{font:inherit}
 .search:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft);outline:2px solid transparent}
 .search kbd{font:12px monospace;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted)}
 .ico{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--soft);color:var(--accent);flex:none}
+.ico.has-img{overflow:hidden}
+/* Ảnh biểu tượng tuỳ chọn (ADR 0004): trang trí, nền soft phía sau để ảnh trong suốt vẫn đọc được ở sáng/tối. */
+.iimg{display:block;object-fit:cover;border-radius:6px;background:var(--soft);flex:none}
+.ico .iimg{width:100%;height:100%;border-radius:0}
+.tp .iimg{margin:-2px}
+.trow .nm b .iimg{display:inline-block}
+.trow .nm b .iimg,.trow .nm b .i{vertical-align:-6px;margin-right:8px}
+.iconpick{border:0;padding:0;margin:0;min-width:0;display:grid;gap:8px}
+.iconpick legend{padding:0;margin-bottom:4px;font-size:13px;font-weight:600}
+.iconpick .h{font-weight:400;color:var(--muted);font-size:12px}
+.ip-row{display:flex;gap:12px;align-items:end}
+.ip-prev{width:48px;height:48px;flex:none}
+.ip-sel{flex:1;min-width:0}
+.drop:disabled{opacity:.6;cursor:progress}
+.drop:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .muted{color:var(--muted)}
 .spin{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}

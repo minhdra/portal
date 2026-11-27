@@ -4,10 +4,14 @@ import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ApiError, api, messageOf } from "@/lib/api-client";
+import { ICON_CHOICES } from "@/lib/format";
+import { iconStateOf, type IconImageState } from "@/lib/icon-image";
 import type { Topic } from "@/lib/types";
 import { flatten, useShell } from "./AppShell";
 import { ConfirmDialog } from "./Dialogs";
 import { Icon } from "./icons/Icon";
+import { IconView } from "./IconView";
+import { IconPicker, commitIconImage } from "./IconPicker";
 import { ItemForm } from "./ItemForm";
 import { useToast } from "./Toast";
 
@@ -157,7 +161,7 @@ function Node({ t, depth, first, last, ctx }: { t: Topic; depth: number; first: 
       ) : (
         <div className={cls}>
           <button type="button" ref={setActivatorNodeRef} className="dr" aria-label={`Kéo để đổi thứ tự ${t.name}`} {...attributes} {...listeners}><Icon name="drag" size="s" /></button>
-          <span className="nm"><b>{t.name}</b><small>{t.itemCount} mục{t.parentId ? `, nằm trong ${ctx.flat.find((x) => x.id === t.parentId)?.name ?? ""}` : ""}</small></span>
+          <span className="nm"><b><IconView name={t.icon || "folder"} imageUrl={t.iconImageUrl} px={24} className="tri" />{t.name}</b><small>{t.itemCount} mục{t.parentId ? `, nằm trong ${ctx.flat.find((x) => x.id === t.parentId)?.name ?? ""}` : ""}</small></span>
           <span className="ord">
             <button type="button" className="ibtn" aria-label={`Chuyển ${t.name} lên`} aria-disabled={first} style={first ? { opacity: .35 } : undefined} onClick={() => ctx.step(t, -1)}><Icon name="up" size="s" /></button>
             <button type="button" className="ibtn" aria-label={`Chuyển ${t.name} xuống`} aria-disabled={last} style={last ? { opacity: .35 } : undefined} onClick={() => ctx.step(t, 1)}><Icon name="down" size="s" /></button>
@@ -176,6 +180,8 @@ function Node({ t, depth, first, last, ctx }: { t: Topic; depth: number; first: 
 function EditRow({ t, ctx }: { t: Topic; ctx: Ctx }) {
   const [name, setName] = useState(t.name);
   const [parent, setParent] = useState(t.parentId ?? "");
+  const [preset, setPreset] = useState(t.icon ?? "");
+  const [img, setImg] = useState<IconImageState>(() => iconStateOf(t.iconImageUrl));
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const banned = new Set(descendantIds(t));
@@ -183,7 +189,9 @@ function EditRow({ t, ctx }: { t: Topic; ctx: Ctx }) {
     if (!name.trim()) { setErr("Nhập tên topic."); return; }
     setBusy(true);
     try {
-      await api.updateTopic(t.id, { name: name.trim(), parentId: parent || null });
+      await api.updateTopic(t.id, { name: name.trim(), parentId: parent || null, icon: preset });
+      try { await commitIconImage("topic", t.id, img, !!t.iconImageUrl); }
+      catch (e) { ctx.toast.err(`Đã lưu topic nhưng chưa đổi được ảnh biểu tượng: ${messageOf(e)}`); }
       ctx.toast.ok("Đã lưu topic.");
       ctx.onSaved();
     } catch (e) {
@@ -201,6 +209,7 @@ function EditRow({ t, ctx }: { t: Topic; ctx: Ctx }) {
           </select>
         </label>
       </div>
+      <IconPicker preset={preset} onPreset={setPreset} presets={ICON_CHOICES} defaultLabel="Thư mục (mặc định)" fallbackName="folder" image={img} onImage={setImg} />
       {err && <span className="err" role="alert"><Icon name="alert" size="s" />{err}</span>}
       <div className="acts"><button type="button" className="btn sm" onClick={() => ctx.setEditing(null)}>Huỷ</button><button type="submit" className="btn sm pri" disabled={busy}>Lưu</button></div>
     </form>

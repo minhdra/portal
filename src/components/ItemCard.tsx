@@ -4,6 +4,7 @@ import { api } from "@/lib/api-client";
 import { TYPE_LABEL, hostOf, iconOf, isInternal, safeUrl } from "@/lib/format";
 import type { Item } from "@/lib/types";
 import { Icon } from "./icons/Icon";
+import { IconView } from "./IconView";
 
 interface Props {
   item: Item;
@@ -41,7 +42,7 @@ export function ItemCard({ item, topicName, onPin, onEdit, onArchive, onRestore 
   return (
     <article className="card" aria-label={item.title}>
       <div className="top">
-        <span className="ico"><Icon name={iconOf(item)} /></span>
+        <span className={`ico ${item.iconImageUrl ? "has-img" : ""}`}><IconView name={iconOf(item)} imageUrl={item.iconImageUrl} px={40} /></span>
         <span className="kind" style={{ flex: 1, marginLeft: 8 }}>{TYPE_LABEL[item.type]}</span>
         <div className="acts2">
           {!archived && (

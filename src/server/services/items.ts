@@ -3,6 +3,7 @@ import { prisma, type Db, type Tx } from "../db";
 import { invalid, notFound } from "../errors";
 import { isUuid, slugify } from "../lib/util";
 import { audit } from "./audit";
+import { iconUrl } from "./icons";
 import { removeBlobs } from "./storage";
 
 type ItemType = "tool" | "web" | "doc" | "note" | "link";
@@ -22,6 +23,8 @@ export interface ItemDto {
   description: string | null;
   url: string | null;
   icon: string | null;
+  /** Ảnh biểu tượng tuỳ chọn (kèm ?v= để cache bust); null nếu dùng icon tên. */
+  iconImageUrl: string | null;
   status: ItemStatus;
   topicId: string | null;
   tags: { id: string; name: string; slug: string }[];
@@ -35,7 +38,7 @@ export interface ItemDto {
 
 export function toItemDto(i: ItemRow): ItemDto {
   return {
-    id: i.id, type: i.type, title: i.title, description: i.description, url: i.url, icon: i.icon, status: i.status,
+    id: i.id, type: i.type, title: i.title, description: i.description, url: i.url, icon: i.icon, iconImageUrl: iconUrl("item", i.id, i.iconUpdatedAt), status: i.status,
     topicId: i.topicId,
     tags: i.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, slug: t.tag.slug })).sort((a, b) => a.name.localeCompare(b.name)),
     pinned: i.pinned, sortOrder: i.sortOrder, fileCount: i._count.files,
@@ -319,10 +322,12 @@ export async function search(q: string) {
   const byId = new Map(found.map((i) => [i.id, i]));
   const items = ids.flatMap((r) => (byId.has(r.id) ? [toItemDto(byId.get(r.id)!)] : []));
   const like = `%${escapeLike(q.trim().slice(0, 100))}%`;
-  const topics = await prisma.$queryRaw<{ id: string; parentId: string | null; name: string; slug: string; icon: string | null }[]>(S`
-    SELECT id, parent_id AS "parentId", name, slug, icon FROM topic
+  const topicRows = await prisma.$queryRaw<{ id: string; parentId: string | null; name: string; slug: string; icon: string | null; iconUpdatedAt: Date | null }[]>(S`
+    SELECT id, parent_id AS "parentId", name, slug, icon, icon_updated_at AS "iconUpdatedAt" FROM topic
     WHERE lower(f_unaccent(name)) LIKE lower(f_unaccent(${like})) ESCAPE '\\'
     ORDER BY sort_order, name LIMIT 20`);
+  // Không SELECT cột bytea: chỉ icon_updated_at để dựng URL.
+  const topics = topicRows.map(({ iconUpdatedAt, ...t }) => ({ ...t, iconImageUrl: iconUrl("topic", t.id, iconUpdatedAt) }));
   return { items, topics };
 }
 

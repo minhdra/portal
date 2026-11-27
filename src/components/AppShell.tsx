@@ -6,6 +6,7 @@ import { api, messageOf } from "@/lib/api-client";
 import type { Item, ItemType, Topic, User } from "@/lib/types";
 import { useAsync } from "@/lib/hooks";
 import { Icon, Logo } from "./icons/Icon";
+import { IconView } from "./IconView";
 import { ThemeToggle } from "./ThemeToggle";
 import { SidePanel } from "./Dialogs";
 import { ItemForm } from "./ItemForm";
@@ -113,7 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {!tp.data && <div className="loading" style={{ padding: "8px 10px" }}><span className="spin" /> Đang tải…</div>}
             {flat.map((t) => (
               <Link key={t.id} className={`tp ${t.depth ? `d${Math.min(t.depth, 2)}` : ""}`} href={`/topic/${t.id}`} aria-current={cur(pathname === `/topic/${t.id}`)}>
-                <Icon name={t.icon && t.icon !== "" ? t.icon : "folder"} /><span className="t">{t.name}</span><span className="c" aria-label={`${t.itemCount} mục`}>{t.itemCount}</span>
+                <IconView name={t.icon && t.icon !== "" ? t.icon : "folder"} imageUrl={t.iconImageUrl} px={24} className="tpi" /><span className="t">{t.name}</span><span className="c" aria-label={`${t.itemCount} mục`}>{t.itemCount}</span>
               </Link>
             ))}
             <hr />

@@ -9,6 +9,9 @@ export interface CallOpts {
   method?: string;
   body?: unknown;
   form?: FormData;
+  /** Thân nhị phân thô + Content-Type tuỳ ý (vd. PUT ảnh). */
+  raw?: Uint8Array;
+  contentType?: string;
   cookie?: string | null;
   ip?: string;
   origin?: string | null;
@@ -26,6 +29,10 @@ export async function call(h: Handler, path: string, o: CallOpts = {}): Promise<
   if (o.cookie) headers.set("cookie", o.cookie);
   let body: BodyInit | undefined;
   if (o.form) body = o.form;
+  else if (o.raw) {
+    headers.set("content-type", o.contentType ?? "application/octet-stream");
+    body = o.raw as BodyInit;
+  }
   else if (o.body !== undefined) {
     headers.set("content-type", "application/json");
     body = typeof o.body === "string" ? o.body : JSON.stringify(o.body);

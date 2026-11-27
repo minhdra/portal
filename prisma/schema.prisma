@@ -97,6 +97,10 @@ model Topic {
   name        String
   description String?
   icon        String?
+  // Ảnh biểu tượng tuỳ chọn (ADR 0004): bytea <= 64 KB cùng hàng; CHECK ở migration. Client bỏ cột này mặc định (db.ts).
+  iconImage     Bytes?    @map("icon_image")
+  iconMime      String?   @map("icon_mime")
+  iconUpdatedAt DateTime? @map("icon_updated_at") @db.Timestamptz(6)
   sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -119,6 +123,10 @@ model Item {
   description String?
   url         String?
   icon        String?
+  // Ảnh biểu tượng tuỳ chọn (ADR 0004): bytea <= 64 KB cùng hàng; CHECK ở migration. Client bỏ cột này mặc định (db.ts).
+  iconImage     Bytes?    @map("icon_image")
+  iconMime      String?   @map("icon_mime")
+  iconUpdatedAt DateTime? @map("icon_updated_at") @db.Timestamptz(6)
   status      ItemStatus @default(active)
   sortOrder   Int        @default(0) @map("sort_order")
   pinned       Boolean    @default(false)

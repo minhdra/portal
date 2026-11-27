@@ -2,9 +2,11 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, api, messageOf } from "@/lib/api-client";
-import { ICON_CHOICES, TYPE_LABEL, formatSize } from "@/lib/format";
+import { ICON_CHOICES, TYPE_ICON, TYPE_LABEL, formatSize } from "@/lib/format";
 import type { Item, ItemType } from "@/lib/types";
+import { iconStateOf, type IconImageState } from "@/lib/icon-image";
 import { useShell } from "./AppShell";
+import { IconPicker, commitIconImage } from "./IconPicker";
 import { Icon } from "./icons/Icon";
 import { useToast } from "./Toast";
 
@@ -31,6 +33,7 @@ export function ItemForm({ item, defaultTopicId, defaultType, onCancel, onSaved 
   const [url, setUrl] = useState(item?.url ?? "");
   const [tags, setTags] = useState(item?.tags.map((t) => t.name).join(", ") ?? "");
   const [icon, setIcon] = useState(item?.icon ?? "");
+  const [iconImg, setIconImg] = useState<IconImageState>(() => iconStateOf(item?.iconImageUrl));
   const [status, setStatus] = useState(item?.status ?? "active");
   const [pending, setPending] = useState<File[]>([]);
   const [over, setOver] = useState(false);
@@ -76,6 +79,12 @@ export function ItemForm({ item, defaultTopicId, defaultType, onCancel, onSaved 
           try { saved = await api.updateItem(saved.id, extra); }
           catch (e) { toast.err(`Đã thêm mục nhưng chưa đặt được ghim/trạng thái: ${messageOf(e)}`); }
         }
+      }
+      if (iconImg.dirty) {
+        try {
+          await commitIconImage("item", saved.id, iconImg, !!item?.iconImageUrl);
+          saved = await api.item(saved.id);
+        } catch (e) { toast.err(`Đã lưu mục nhưng chưa đổi được ảnh biểu tượng: ${messageOf(e)}`); }
       }
       if (pending.length) {
         try { await api.uploadFiles(saved.id, pending); }
@@ -149,20 +158,15 @@ export function ItemForm({ item, defaultTopicId, defaultType, onCancel, onSaved 
           <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Dữ liệu, Tệp" {...inv("tags")} />
           {fe("tags")}
         </label>
-        <label className="fld">Biểu tượng
-          <select value={icon} onChange={(e) => setIcon(e.target.value)}>
-            <option value="">Theo loại</option>
-            {ICON_CHOICES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        <label className="fld">Trạng thái
+          <select value={status} onChange={(e) => setStatus(e.target.value as Item["status"])}>
+            <option value="active">Hiển thị</option>
+            <option value="draft">Ẩn (nháp)</option>
+            <option value="archived">Lưu trữ</option>
           </select>
         </label>
       </div>
-      <label className="fld">Trạng thái
-        <select value={status} onChange={(e) => setStatus(e.target.value as Item["status"])}>
-          <option value="active">Hiển thị</option>
-          <option value="draft">Ẩn (nháp)</option>
-          <option value="archived">Lưu trữ</option>
-        </select>
-      </label>
+      <IconPicker preset={icon} onPreset={setIcon} presets={ICON_CHOICES} defaultLabel="Theo loại" fallbackName={TYPE_ICON[type]} image={iconImg} onImage={setIconImg} />
       {formErr && <div className="err" role="alert"><Icon name="alert" size="s" />{formErr}</div>}
       <div className="acts">
         {onCancel && <button type="button" className="btn" onClick={onCancel}>Huỷ</button>}

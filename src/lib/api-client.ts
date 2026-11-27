@@ -55,6 +55,8 @@ interface ReqOpts {
   method?: string;
   body?: unknown;
   form?: FormData;
+  /** thân nhị phân thô (PUT ảnh biểu tượng) */
+  blob?: Blob;
   /** không tự chuyển hướng khi 401 (dùng cho đăng nhập) */
   noRedirect?: boolean;
   raw?: boolean;
@@ -63,6 +65,10 @@ interface ReqOpts {
 async function request<T>(path: string, opts: ReqOpts = {}): Promise<T> {
   const init: RequestInit = { method: opts.method ?? "GET", credentials: "same-origin", headers: {} };
   if (opts.form) init.body = opts.form;
+  else if (opts.blob) {
+    (init.headers as Record<string, string>)["Content-Type"] = opts.blob.type || "application/octet-stream";
+    init.body = opts.blob;
+  }
   else if (opts.body !== undefined) {
     (init.headers as Record<string, string>)["Content-Type"] = "application/json";
     init.body = JSON.stringify(opts.body);
@@ -117,7 +123,7 @@ export const api = {
   topics: () => request<{ topics: Topic[] }>("/topics"),
   createTopic: (b: { name: string; parentId?: string | null; icon?: string }) =>
     request<Topic>("/topics", { method: "POST", body: b }),
-  updateTopic: (id: string, b: { name?: string; icon?: string; parentId?: string | null }) =>
+  updateTopic: (id: string, b: { name?: string; icon?: string | null; parentId?: string | null }) =>
     request<Topic>(`/topics/${id}`, { method: "PATCH", body: b }),
   deleteTopic: (id: string) => request<void>(`/topics/${id}`, { method: "DELETE" }),
   reorderTopics: (parentId: string | null, ids: string[]) =>
@@ -136,6 +142,12 @@ export const api = {
     request<void>("/items/reorder", { method: "POST", body: { topicId, ids } }),
   tags: () => request<{ tags: Tag[] }>("/tags"),
   search: (q: string) => request<{ items: Item[]; topics: Topic[] }>(`/search${qs({ q })}`),
+
+  // Ảnh biểu tượng (PUT ảnh thô <= 64 KB; DELETE về icon tên)
+  setItemIcon: (id: string, png: Blob) => request<Item>(`/items/${id}/icon`, { method: "PUT", blob: png }),
+  clearItemIcon: (id: string) => request<void>(`/items/${id}/icon`, { method: "DELETE" }),
+  setTopicIcon: (id: string, png: Blob) => request<Topic>(`/topics/${id}/icon`, { method: "PUT", blob: png }),
+  clearTopicIcon: (id: string) => request<void>(`/topics/${id}/icon`, { method: "DELETE" }),
 
   // File (API.md chưa nêu route liệt kê tệp: giả định GET /items/:id/files → {files})
   itemFiles: async (id: string): Promise<FileInfo[]> => {

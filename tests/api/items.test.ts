@@ -28,7 +28,7 @@ describe("items CRUD", () => {
     expect(r.status).toBe(201);
     const b = await jsonOf(r);
     expect(Object.keys(b).sort()).toEqual(
-      ["createdAt", "description", "fileCount", "icon", "id", "lastOpenedAt", "pinned", "sortOrder", "status", "tags", "title", "topicId", "type", "updatedAt", "url"].sort(),
+      ["createdAt", "description", "fileCount", "icon", "iconImageUrl", "id", "lastOpenedAt", "pinned", "sortOrder", "status", "tags", "title", "topicId", "type", "updatedAt", "url"].sort(),
     );
     expect(b).toMatchObject({ status: "active", pinned: false, fileCount: 0, lastOpenedAt: null, url: "https://example.com/" });
     expect(b.tags.map((t: any) => t.slug).sort()).toEqual(["ai", "cong-cu"]);

@@ -52,9 +52,9 @@ const config: NextConfig = {
   },
   async headers() {
     return [
-      // Mọi đường dẫn trừ /api/files/*: CSP đầy đủ, không cho nhúng khung.
+      // Mọi đường dẫn trừ /api/files/* và /api/(items|topics)/:id/icon: CSP đầy đủ, không cho nhúng khung.
       {
-        source: "/((?!api/files/).*)",
+        source: "/((?!api/files/|api/(?:items|topics)/[^/]+/icon$).*)",
         headers: [
           ...common,
           { key: "Content-Security-Policy", value: csp },
@@ -66,6 +66,11 @@ const config: NextConfig = {
       // serveFile (src/server/services/files.ts). Ở đây chỉ thêm các header chung và X-Frame-Options: SAMEORIGIN.
       {
         source: "/api/files/:path*",
+        headers: [...common, { key: "X-Frame-Options", value: "SAMEORIGIN" }],
+      },
+      // Ảnh biểu tượng: cùng lý do (CSP của route nằm trong serveIcon, ADR 0004). img-src 'self' của CSP chung đã đủ cho <img>.
+      {
+        source: "/api/:kind(items|topics)/:id/icon",
         headers: [...common, { key: "X-Frame-Options", value: "SAMEORIGIN" }],
       },
     ];

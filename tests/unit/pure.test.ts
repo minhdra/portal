@@ -134,6 +134,12 @@ describe("next.config headers (F7)", () => {
     const keys = (src: string) => rules.find((r) => r.source === src)!.headers.map((h) => h.key.toLowerCase());
     expect(keys("/api/files/:path*")).not.toContain("content-security-policy");
     expect(keys("/api/files/:path*")).toContain("x-frame-options");
-    expect(keys("/((?!api/files/).*)")).toContain("content-security-policy");
+    const generic = rules.find((r) => r.headers.some((h) => h.key.toLowerCase() === "content-security-policy"))!;
+    expect(generic.headers.map((h) => h.key.toLowerCase())).toContain("content-security-policy");
+    // Ảnh biểu tượng (ADR 0004): CSP do route đặt; cấu hình không được ghi đè.
+    expect(keys("/api/:kind(items|topics)/:id/icon")).not.toContain("content-security-policy");
+    const re = new RegExp("^" + generic.source.replace(/^\//, "/") + "$");
+    for (const p of ["/api/items/abc/icon", "/api/topics/abc/icon", "/api/files/x"]) expect(re.test(p), p).toBe(false);
+    for (const p of ["/", "/items/abc", "/topic/abc", "/api/items/abc", "/api/items/abc/files", "/api/items/abc/icon/x"]) expect(re.test(p), p).toBe(true);
   });
 });

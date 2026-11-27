@@ -3,6 +3,7 @@ import { prisma, type Db, type Tx } from "../db";
 import { conflict, invalid, notFound } from "../errors";
 import { isUuid, slugify } from "../lib/util";
 import { audit } from "./audit";
+import { iconUrl } from "./icons";
 
 export const MAX_DEPTH = 32; // giới hạn độ sâu khi duyệt cây (CTE) và độ sâu tối đa của cây
 
@@ -12,14 +13,16 @@ export interface TopicDto {
   name: string;
   slug: string;
   icon: string | null;
+  /** Ảnh biểu tượng tuỳ chọn (kèm ?v=); null nếu dùng icon tên. */
+  iconImageUrl: string | null;
   sortOrder: number;
   itemCount: number;
   children: TopicDto[];
 }
 
-type Row = { id: string; parentId: string | null; name: string; slug: string; icon: string | null; sortOrder: number };
+type Row = { id: string; parentId: string | null; name: string; slug: string; icon: string | null; iconUpdatedAt?: Date | null; sortOrder: number };
 const toDto = (t: Row, itemCount = 0): TopicDto => ({
-  id: t.id, parentId: t.parentId, name: t.name, slug: t.slug, icon: t.icon, sortOrder: t.sortOrder, itemCount, children: [],
+  id: t.id, parentId: t.parentId, name: t.name, slug: t.slug, icon: t.icon, iconImageUrl: iconUrl("topic", t.id, t.iconUpdatedAt), sortOrder: t.sortOrder, itemCount, children: [],
 });
 
 /** Khoá tư vấn: tuần tự hoá mọi thay đổi cấu trúc cây để hai lần di chuyển song song không tạo chu trình. */
@@ -159,7 +162,7 @@ export async function updateTopic(
     }
     const renaming = patch.name !== undefined && patch.name !== cur.name;
     if (renaming) data.name = patch.name;
-    if (patch.icon !== undefined) data.icon = patch.icon;
+    if (patch.icon !== undefined) data.icon = patch.icon || null;
     if (moving) {
       data.parentId = newParent;
       const max = await tx.topic.aggregate({ where: { parentId: newParent }, _max: { sortOrder: true } });

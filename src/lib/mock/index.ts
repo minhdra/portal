@@ -4,7 +4,7 @@ import type { FileInfo, Item, ItemType, Tag, Topic } from "../types";
 import { makePdf, makePng } from "./pdf";
 
 interface MItem extends Omit<Item, "tags"> { tags: Tag[] }
-interface MTopic { id: string; parentId: string | null; name: string; slug: string; icon: string | null; sortOrder: number }
+interface MTopic { id: string; parentId: string | null; name: string; slug: string; icon: string | null; iconImageUrl: string | null; sortOrder: number }
 interface MFile extends FileInfo { itemId: string; blob: Blob; url: string; view?: unknown }
 interface MVersion { version: number; createdAt: string; author: string; markdown: string }
 
@@ -21,11 +21,11 @@ let loggedIn = true;
 export const DEMO_PASSWORD = "portal-demo-123";
 
 const topics: MTopic[] = [
-  { id: "t-hy", parentId: null, name: "Hưng Yên", slug: "hung-yen", icon: "map", sortOrder: 0 },
-  { id: "t-pt", parentId: null, name: "Phú Thọ", slug: "phu-tho", icon: "map", sortOrder: 1 },
-  { id: "t-pta", parentId: "t-pt", name: "Huyện A", slug: "huyen-a", icon: "folder", sortOrder: 0 },
-  { id: "t-ht", parentId: null, name: "Hạ tầng", slug: "ha-tang", icon: "server", sortOrder: 2 },
-  { id: "t-mb", parentId: null, name: "Mẫu biểu chung", slug: "mau-bieu-chung", icon: "doc", sortOrder: 3 },
+  { id: "t-hy", parentId: null, name: "Hưng Yên", slug: "hung-yen", icon: "map", iconImageUrl: null, sortOrder: 0 },
+  { id: "t-pt", parentId: null, name: "Phú Thọ", slug: "phu-tho", icon: "map", iconImageUrl: null, sortOrder: 1 },
+  { id: "t-pta", parentId: "t-pt", name: "Huyện A", slug: "huyen-a", icon: "folder", iconImageUrl: null, sortOrder: 0 },
+  { id: "t-ht", parentId: null, name: "Hạ tầng", slug: "ha-tang", icon: "server", iconImageUrl: null, sortOrder: 2 },
+  { id: "t-mb", parentId: null, name: "Mẫu biểu chung", slug: "mau-bieu-chung", icon: "doc", iconImageUrl: null, sortOrder: 3 },
 ];
 const tagList: Tag[] = [];
 const tag = (n: string): Tag => {
@@ -35,7 +35,7 @@ const tag = (n: string): Tag => {
 };
 let order = 0;
 const mk = (p: Partial<MItem> & { id: string; type: ItemType; title: string }, tags: string[] = []): MItem => ({
-  description: null, url: null, icon: null, status: "active", topicId: "t-hy", pinned: false,
+  description: null, url: null, icon: null, iconImageUrl: null, status: "active", topicId: "t-hy", pinned: false,
   sortOrder: order++, fileCount: 0, createdAt: ago(200), updatedAt: ago(30), lastOpenedAt: null, ...p, tags: tags.map(tag),
 });
 const items: MItem[] = [
@@ -124,13 +124,27 @@ async function route(method: string, url: URL, body: unknown, init?: RequestInit
   if (p === "/topics" && method === "POST") {
     if (!String(b.name ?? "").trim()) throw new HttpErr(422, "validation", "Dữ liệu không hợp lệ.", { name: "Nhập tên topic." });
     const siblings = topics.filter((t) => t.parentId === (b.parentId ?? null));
-    const t: MTopic = { id: uid("t"), parentId: b.parentId ?? null, name: b.name.trim(), slug: slugify(b.name), icon: b.icon ?? "folder", sortOrder: siblings.length };
+    const t: MTopic = { id: uid("t"), parentId: b.parentId ?? null, name: b.name.trim(), slug: slugify(b.name), icon: b.icon ?? "folder", iconImageUrl: null, sortOrder: siblings.length };
     topics.push(t);
     return json({ ...t, itemCount: 0, children: [] }, 201);
   }
   if (p === "/topics/reorder") {
     (b.ids as string[]).forEach((id, i) => { const t = topics.find((x) => x.id === id); if (t) t.sortOrder = i; });
     return new Response(null, { status: 204 });
+  }
+  // Ảnh biểu tượng: bản mock lưu data: URL (CSP img-src cho phép data:, không cho blob:).
+  if ((m = p.match(/^\/(items|topics)\/([^/]+)\/icon$/))) {
+    const holder: { iconImageUrl: string | null } = m[1] === "items" ? need(items.find((x) => x.id === m![2])) : need(topics.find((x) => x.id === m![2]));
+    if (method === "PUT") {
+      const blob = init?.body;
+      if (!(blob instanceof Blob)) throw new HttpErr(422, "validation", "Dữ liệu không hợp lệ.", { file: "Thiếu ảnh." });
+      if (blob.size > 64 * 1024) throw new HttpErr(413, "payload_too_large", "Ảnh biểu tượng tối đa 64 KB.");
+      if (!/^image\/(png|jpeg|webp|gif)$/.test(blob.type)) throw new HttpErr(415, "unsupported_media_type", "Chỉ nhận ảnh PNG, JPEG, WebP hoặc GIF.");
+      holder.iconImageUrl = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+      return json(m[1] === "items" ? toItem(holder as MItem) : { ...(holder as MTopic), itemCount: 0, children: [] });
+    }
+    if (method === "DELETE") { holder.iconImageUrl = null; return new Response(null, { status: 204 }); }
+    throw new HttpErr(404, "not_found", "Không có ảnh biểu tượng.");
   }
   if ((m = p.match(/^\/topics\/([^/]+)$/))) {
     const t = need(topics.find((x) => x.id === m![1]));
@@ -139,7 +153,7 @@ async function route(method: string, url: URL, body: unknown, init?: RequestInit
       if ("name" in b && !String(b.name).trim()) throw new HttpErr(422, "validation", "Dữ liệu không hợp lệ.", { name: "Nhập tên topic." });
       if (b.name) { t.name = b.name.trim(); t.slug = slugify(b.name); }
       if ("parentId" in b) t.parentId = b.parentId ?? null;
-      if (b.icon) t.icon = b.icon;
+      if ("icon" in b) t.icon = b.icon || null;
       return json({ ...t, itemCount: 0, children: [] });
     }
     if (method === "DELETE") {

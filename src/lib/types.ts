@@ -16,6 +16,8 @@ export interface Topic {
   name: string;
   slug: string;
   icon: string | null;
+  /** Ảnh biểu tượng tuỳ chọn (đã kèm ?v=); null thì dùng icon tên. */
+  iconImageUrl: string | null;
   sortOrder: number;
   itemCount: number;
   children: Topic[];
@@ -35,6 +37,7 @@ export interface Item {
   description: string | null;
   url: string | null;
   icon: string | null;
+  iconImageUrl: string | null;
   status: ItemStatus;
   topicId: string | null;
   tags: Tag[];

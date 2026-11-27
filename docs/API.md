@@ -9,14 +9,14 @@ Auth: cookie `portal_session` (httpOnly, SameSite=Lax). Khi `COOKIE_SECURE=1` ho
 - `POST /api/auth/change-password` {currentPassword,newPassword(>=10 ký tự)} → 204, xoá mọi session khác của user.
 
 ## Topic (cây)
-- `GET /api/topics` → {topics:[{id,parentId,name,slug,icon,sortOrder,itemCount,children:[...]}]}
+- `GET /api/topics` → {topics:[{id,parentId,name,slug,icon,iconImageUrl,sortOrder,itemCount,children:[...]}]} (`iconImageUrl`: xem mục Ảnh biểu tượng; `null` nếu không có)
 - `POST /api/topics` {parentId?,name,icon?} (slug sinh từ name, bỏ dấu, chống trùng) → 201 topic
 - `PATCH /api/topics/:id` {name?,icon?,parentId?} (chặn chu trình bằng CTE có giới hạn độ sâu → 409)
 - `DELETE /api/topics/:id` → 204; còn item/con → 409 `conflict`
 - `POST /api/topics/reorder` {parentId|null, ids:[uuid...]} → 204. `ids` phải là ĐÚNG tập chủ đề con của `parentId` (thiếu/thừa/trùng → 422).
 
 ## Item
-Item DTO: {id,type:"tool|web|doc|note|link",title,description,url,icon,status:"active|archived",topicId,tags:[{id,name,slug}],pinned,sortOrder,fileCount,createdAt,updatedAt,lastOpenedAt}
+Item DTO: {id,type:"tool|web|doc|note|link",title,description,url,icon,iconImageUrl,status:"active|archived",topicId,tags:[{id,name,slug}],pinned,sortOrder,fileCount,createdAt,updatedAt,lastOpenedAt}
 - `GET /api/items?topic=<id>&q=&tag=<slug>&type=&status=active&pinned=1&recent=1&limit=50&cursor=` → {items,nextCursor}. `q` dùng cột `search` + `f_unaccent` (xem ADR 0001); `topic` gồm cả topic con.
 - `POST /api/items` {type,title,description?,url?,icon?,topicId?,tags?:[name]} → 201 item
 - `GET /api/items/:id`, `PATCH /api/items/:id` (các trường trên + status, pinned), `DELETE /api/items/:id` = lưu trữ (status=archived); `?hard=1` xoá cứng + xoá blob
@@ -25,6 +25,14 @@ Item DTO: {id,type:"tool|web|doc|note|link",title,description,url,icon,status:"a
 - `GET /api/tags` → {tags:[{id,name,slug,count}]}
 - `GET /api/search?q=` → {items,topics} (gộp tìm item + note + topic)
 Nếu schema thiếu cột `pinned`/`lastOpenedAt`: API agent thêm migration mới `20261127xxxxxx_pinned_recent` (KHÔNG sửa migration init) và báo lại.
+
+## Ảnh biểu tượng (item và topic; ADR 0004)
+Item/topic có thể có ảnh riêng làm biểu tượng, thay cho `icon` (tên trong bộ SVG vẽ sẵn). Ảnh nằm trong Postgres cùng hàng (`icon_image`/`icon_mime`/`icon_updated_at`), không dùng `UPLOAD_DIR`. DTO item/topic có `iconImageUrl: string|null`, dạng `/api/items/:id/icon?v=<icon_updated_at ms>` (`?v=` để cache bust); `null` thì UI dùng `icon`.
+- `PUT /api/items/:id/icon`, `PUT /api/topics/:id/icon`: thân là ảnh thô (bất kỳ Content-Type) hoặc multipart trường `file`. Tối đa 64 KB (UI thu nhỏ về PNG 128x128 trước khi gửi); loại xác định bằng magic bytes (`file-type`), chỉ `image/png|jpeg|webp|gif`; SVG/HTML/loại khác → 415 `unsupported_media_type`; quá 64 KB → 413 `payload_too_large` (đo khi đọc luồng); rỗng/thiếu `file` → 422; id lạ → 404. Thành công → 200 item/topic DTO mới. Thay ảnh cũ nếu có. Ghi audit `item.icon_set`/`topic.icon_set` {mime,size}.
+- `DELETE /api/items/:id/icon`, `DELETE /api/topics/:id/icon` → 204 (xoá ảnh, quay về `icon` tên; idempotent; id lạ → 404). Audit `*.icon_clear`.
+- `GET /api/items/:id/icon`, `GET /api/topics/:id/icon` → ảnh với Content-Type thật; header `X-Content-Type-Options: nosniff`, `Cache-Control: private, max-age=86400, immutable`, `ETag` (If-None-Match → 304), `Content-Security-Policy: default-src 'none'; sandbox; frame-ancestors 'self'` (CSP duy nhất, `next.config.ts` không đặt CSP cho đường dẫn này), `Cross-Origin-Resource-Policy: same-origin`. Không có ảnh → 404. Cần đăng nhập.
+- PUT/DELETE kiểm `Origin` + đăng nhập như mọi route ghi. `PATCH /api/topics/:id` với `icon: ""` đặt `icon = null`.
+- Danh sách/tìm kiếm không đọc cột ảnh (PrismaClient bỏ `iconImage` mặc định; truy vấn thô chỉ lấy `icon_updated_at`).
 
 ## File
 - `POST /api/items/:id/files` multipart (`file`, tối đa 50 MB, nhiều file) → 201 {files:[{id,originalName,mime,size,sha256}]}. Lưu ở `UPLOAD_DIR/<yyyy>/<mm>/<uuid>` (storage_key không chứa tên gốc), kiểm tra mime theo magic bytes, khử tên, chặn path traversal, dedupe theo sha256 trong cùng item (unique `(item_id, sha256)`; đua nhau vẫn trả bản cũ `duplicate:true`). Cả lô được kiểm tra (rỗng/size/mime) trước khi ghi tệp đầu tiên; tối đa 3 request upload xử lý đồng thời, hàng đợi đầy → 429.

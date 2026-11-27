@@ -3,12 +3,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, fileUrl, messageOf } from "@/lib/api-client";
-import { fileIcon, fileKind, formatSize, hostOf, safeUrl } from "@/lib/format";
+import { fileIcon, fileKind, formatSize, hostOf, iconOf, safeUrl } from "@/lib/format";
 import { useAsync } from "@/lib/hooks";
 import type { FileInfo, FileView } from "@/lib/types";
 import { useShell } from "./AppShell";
 import { ConfirmDialog } from "./Dialogs";
 import { Icon } from "./icons/Icon";
+import { IconView } from "./IconView";
 import { Markdown } from "./Markdown";
 import { useToast } from "./Toast";
 
@@ -74,6 +75,7 @@ export function ItemDetail({ id }: { id: string }) {
         <b style={{ color: "var(--fg)" }}>{it.title}</b>
       </nav>
       <div className="ph">
+        <span className={`ico ${it.iconImageUrl ? "has-img" : ""}`} style={{ width: 44, height: 44 }}><IconView name={iconOf(it)} imageUrl={it.iconImageUrl} px={44} /></span>
         <h1>{it.title}</h1>
         <button type="button" className="btn" onClick={() => shell.openPanel({ item: it })}><Icon name="edit" size="s" /> Sửa</button>
       </div>
