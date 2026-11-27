@@ -85,7 +85,7 @@ services:
     # nginx master cần các quyền này để chown thư mục tạm, hạ quyền worker, bind :80
     cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
     ports:
-      - "127.0.0.1:${GATEWAY_PORT:-18790}:80"
+      - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-18790}:80"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -141,9 +141,9 @@ services:
 networks:
   portal:
     internal: true   # portal/postgres/backup không ra Internet, không với tới từ host
-  # gateway: publish 127.0.0.1 và tới host.docker.internal. Subnet GHIM cứng để nginx chỉ tin CF-Connecting-IP từ
-  # gateway của chính subnet này (10.213.77.1, nơi kết nối từ host/cloudflared đi vào). Đổi dải => sửa
-  # set_real_ip_from + allow trong nginx/portal.conf. Dải này không trùng mạng docker/route đang có (kiểm lúc viết).
+  # gateway: publish ${GATEWAY_BIND}:${GATEWAY_PORT} và tới host.docker.internal. Subnet GHIM cứng: 10.213.77.1 là nơi kết nối
+  # từ chính máy host đi vào (dùng cho `allow` của /api/health trong nginx/portal.conf; IP khách thật tin ở set_real_ip_from).
+  # Đổi dải => sửa allow trong nginx/portal.conf. Dải này không trùng mạng docker/route đang có (kiểm lúc viết).
   edge:
     ipam:
       config:

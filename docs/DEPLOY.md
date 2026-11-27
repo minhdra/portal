@@ -77,21 +77,23 @@ Nếu portal không healthy sau cập nhật, script trả ảnh `portal-app:rol
 
 Đặt file `*.conf` (các khối `location`) vào `nginx/conf.d/tools/`, rồi `docker compose exec gateway nginx -t && docker compose exec gateway nginx -s reload`. Mẫu `auto-pull-nas.conf.example` (`/auto-pull-nas/` → `host.docker.internal:18780`; khi bật, đường dẫn này KHÔNG qua xác thực của portal): tắt mặc định vì frontend auto-pull-nas hiện chưa có base path `/auto-pull-nas/`; chỉ bật sau khi PR base path của repo đó được merge và deploy.
 
-## 7. Chuyển tunnel Cloudflare sang gateway (CHỈ MÔ TẢ, chưa thực hiện; cần chủ dự án đồng ý)
+## 7. Đường vào công khai (ĐÃ TRIỂN KHAI 27/11/2026): domain → router 192.168.10.1 → gateway
 
-Hiện trạng (đọc bằng `docker inspect apn-tunnel`, đã bỏ phần bí mật): container `apn-tunnel`, ảnh `cloudflare/cloudflared:2024.12.2`, `network_mode: host`, restart `unless-stopped`, entrypoint `cloudflared --no-autoupdate`, lệnh `tunnel --no-autoupdate --url http://127.0.0.1:18780`, môi trường chỉ có PATH/SSL_CERT_FILE, không có token. Nghĩa là đây là quick tunnel (`*.trycloudflare.com`, không đăng nhập, không có tên miền cố định). SPEC nói tunnel `xldl-hye.tumiki.org`; cấu hình hiện tại KHÔNG phải tunnel có tên đó. Mỗi lần tạo lại container quick tunnel, URL đổi.
+Thực tế đã kiểm: `xldl-hye.tumiki.org` trỏ về IP công cộng của mạng; một proxy nginx ở router `192.168.10.1` kết thúc TLS rồi chuyển tới `192.168.10.240:18780` và gắn IP khách vào cuối `X-Forwarded-For`. (`apn-tunnel` là quick tunnel `trycloudflare`, không liên quan tới domain này.)
 
-Phương án A (giữ quick tunnel, đổi đích): tạo lại `apn-tunnel` với `--url http://127.0.0.1:18790` thay vì 18780. URL công khai SẼ ĐỔI. Các bước:
+Cấu hình hiện tại (không cần đổi gì ở router):
+- Gateway portal nghe `192.168.10.240:18780` (`GATEWAY_BIND`/`GATEWAY_PORT` trong `.env`). Cổng `18780` trước đây là của web auto-pull-nas; web này đã chuyển sang `18781` (`WEB_PORT=18781` trong `.env` của auto-pull-nas) và build với `WEB_BASE_PATH=/auto-pull-nas/`.
+- `/` → portal; `/auto-pull-nas/` → `host.docker.internal:18781` (`nginx/conf.d/tools/auto-pull-nas.conf`, cắt tiền tố; auto-pull-nas tự có đăng nhập riêng, KHÔNG qua xác thực portal).
+- IP khách: gateway chỉ tin `X-Forwarded-For` khi kết nối đến từ `192.168.10.1` (`set_real_ip_from` trong `nginx/portal.conf`) và lấy phần tử CUỐI. Máy LAN nối thẳng vào gateway không giả được IP (đã kiểm: gửi XFF giả vẫn bị ghi IP thật).
+- Cookie portal luôn `Secure`/`__Host-`: dùng qua https (domain). Mở `http://192.168.10.240:18780` trực tiếp trong LAN thì đăng nhập sẽ không giữ được phiên.
+- `/api/health` bị 403 từ ngoài (chỉ curl từ chính máy qua mạng edge); kiểm tra nội bộ: `docker compose exec portal node -e "fetch('http://127.0.0.1:3100/api/health').then(r=>r.text()).then(console.log)"`.
 
-1. Gateway đã chạy và `curl http://127.0.0.1:18790/` trả 200; đã bật khối `/auto-pull-nas/` (mục 6) nếu muốn giữ truy cập auto-pull-nas qua cùng domain.
-2. Ghi lại cấu hình cũ: `docker inspect apn-tunnel > tunnel-cu.json` (không commit; chứa env).
-3. `docker rm -f apn-tunnel` rồi `docker run -d --name apn-tunnel --network host --restart unless-stopped cloudflare/cloudflared:2024.12.2 tunnel --no-autoupdate --url http://127.0.0.1:18790`; lấy URL mới từ `docker logs apn-tunnel`.
+Quay lui (≈15 giây gián đoạn), theo thứ tự:
+1. Portal: bỏ `GATEWAY_BIND`, đặt lại `GATEWAY_PORT=18790` trong `.env`, `docker compose up -d --no-deps gateway` (cổng 18780 được giải phóng).
+2. auto-pull-nas: xoá `WEB_PORT=18781` khỏi `.env`, `docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.cluster.yml up -d --no-deps web` (đủ 3 file: thiếu cluster.yml thì API/số liệu sai).
+Ảnh web có tiền tố vẫn chạy ở gốc `/` (rewrite `/auto-pull-nas/` → `/`), nên giữ `WEB_BASE_PATH` cũng được.
 
-Phương án B (tên miền cố định `xldl-hye.tumiki.org`): dùng named tunnel: ingress `xldl-hye.tumiki.org` → `http://127.0.0.1:18790`, chạy `cloudflared tunnel run --token <TOKEN>` (token lấy từ dashboard Cloudflare Zero Trust, đặt trong biến môi trường, không ghi vào repo/log). Cần chủ dự án có quyền tên miền.
-
-Quay lui: `docker rm -f apn-tunnel` rồi chạy lại lệnh gốc với `--url http://127.0.0.1:18780` (cùng ảnh, `--network host`, `--restart unless-stopped`). Auto-pull-nas không bị ảnh hưởng vì cổng 18780 vẫn publish trên host. Phương án A quay lui không lấy lại được URL cũ (quick tunnel cấp URL ngẫu nhiên mới).
-
-Sau khi chuyển: gateway tin `CF-Connecting-IP` chỉ từ dải mạng docker/loopback; cổng gateway bind `127.0.0.1` nên người ngoài không giả được header này.
+Nếu đổi proxy phía trước (đổi IP router, hoặc dùng Cloudflare named tunnel): sửa `set_real_ip_from` và `real_ip_header` (Cloudflare: `CF-Connecting-IP`, nguồn tin cậy là gateway mạng edge `10.213.77.1`, bind `127.0.0.1`) rồi `docker compose exec gateway nginx -s reload`. Tuyệt đối không để gateway nghe trên giao diện mà người ngoài tới được trừ qua proxy tin cậy.
 
 ## 7b. Ghim ảnh
 
