@@ -16,7 +16,9 @@ done
 
 docker compose build
 docker compose run --rm migrate          # prisma migrate deploy + seed idempotent
-docker compose up -d --remove-orphans
+# `up -d` chờ portal healthy vì gateway depends_on service_healthy: portal hỏng thì lệnh này THOÁT KHÁC 0 (và gateway chưa lên).
+# Không để set -e cắt ở đây, nếu không nhánh rollback bên dưới không bao giờ chạy.
+docker compose up -d --remove-orphans || echo "CẢNH BÁO: up -d báo lỗi (portal không healthy?), kiểm tra health rồi rollback." >&2
 
 healthy() {
   for _ in $(seq 1 30); do
@@ -36,7 +38,13 @@ echo "Health FAIL -> rollback ảnh portal-app:rollback" >&2
 if docker image inspect portal-app:rollback >/dev/null 2>&1; then
   docker tag portal-app:rollback portal-app:latest
   docker compose up -d --no-build --no-deps portal
-  healthy && echo "Đã rollback, portal healthy." || echo "Rollback xong nhưng vẫn không healthy: xem docker compose logs portal" >&2
+  if healthy; then
+    # gateway chưa được tạo/khởi động khi up -d thất bại: dựng nốt toàn bộ stack bằng ảnh cũ
+    docker compose up -d --no-build --remove-orphans && echo "Đã rollback, portal healthy." \
+      || echo "Rollback portal xong nhưng up -d các dịch vụ còn lại lỗi: xem docker compose ps" >&2
+  else
+    echo "Rollback xong nhưng vẫn không healthy: xem docker compose logs portal" >&2
+  fi
 else
   echo "Không có ảnh cũ để quay lui (lần triển khai đầu)." >&2
 fi

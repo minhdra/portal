@@ -22,15 +22,16 @@ run_once() {
   tarf="$DIR/uploads/uploads-$ts.tar.gz"
   trap 'rm -f "$dump.tmp" "$tarf.tmp"' EXIT
 
-  pg_dump -Fc --no-owner -f "$dump.tmp"
+  # Trong chế độ --loop hàm chạy trong `run_once || ...` nên set -e KHÔNG có hiệu lực: mỗi bước phải tự `|| return 1`.
+  pg_dump -Fc --no-owner -f "$dump.tmp" || return 1
   # Kiểm tra khôi phục được: pg_restore đọc được mục lục và có bảng dữ liệu.
   n="$(pg_restore --list "$dump.tmp" | grep -c ' TABLE DATA ' || true)"
   if [ "$n" -lt 1 ]; then echo "LỖI: dump không có mục TABLE DATA" >&2; return 1; fi
-  mv "$dump.tmp" "$dump"
+  mv "$dump.tmp" "$dump" || return 1
 
-  tar -C "$UPLOADS" -czf "$tarf.tmp" .
-  tar -tzf "$tarf.tmp" >/dev/null   # kiểm tra đọc được
-  mv "$tarf.tmp" "$tarf"
+  tar -C "$UPLOADS" -czf "$tarf.tmp" . || return 1
+  tar -tzf "$tarf.tmp" >/dev/null || return 1   # kiểm tra đọc được
+  mv "$tarf.tmp" "$tarf" || return 1
   trap - EXIT
 
   # Xoay vòng: giữ KEEP bản mới nhất mỗi loại.
