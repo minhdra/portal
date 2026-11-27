@@ -7,3 +7,5 @@ uploads/
 backups/
 *.log
 prisma/generated/
+tsconfig.tsbuildinfo
+.next/

@@ -102,7 +102,7 @@ export function ItemsView({ topicId }: { topicId?: string }) {
 
   const add = () => shell.openPanel({ topicId: topicId ?? null });
   const filtered = !!(type || tag);
-  const noTopics = shell.topicsLoaded && shell.topics.length === 0 && !topicId && !q && !view;
+  const noTopics = shell.topicsLoaded && shell.topics.length === 0 && !topicId && !q && !view && list.data != null && list.data.items.length === 0;
   const topicMissing = !!topicId && shell.topicsLoaded && !topic;
 
   return (

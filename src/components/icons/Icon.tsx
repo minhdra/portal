@@ -2,9 +2,12 @@ import { ICON_PATHS, ILLUSTRATIONS } from "./paths";
 
 export type IconName = string;
 
+/** Tên biểu tượng của dữ liệu mẫu (seed) khác tên trong bộ SVG. */
+const ICON_ALIAS: Record<string, string> = { wrench: "tool", book: "doc" };
+
 /** Biểu tượng SVG nhúng trực tiếp: stroke currentColor nên theo màu sáng/tối. */
 export function Icon({ name, size, className = "" }: { name: IconName; size?: "s" | "l"; className?: string }) {
-  const body = ICON_PATHS[name] ?? ICON_PATHS.link;
+  const body = ICON_PATHS[name] ?? ICON_PATHS[ICON_ALIAS[name] ?? ""] ?? ICON_PATHS.link;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
