@@ -1,0 +1,232 @@
+// Schema portal. Xem docs/adr/0001-data-model.md.
+// Cột `search` (tsvector GENERATED) và các index một phần được tạo bằng SQL trong migration;
+// Prisma chỉ khai báo để không báo drift.
+
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  admin
+  user
+
+  @@map("user_role")
+}
+
+enum ItemType {
+  tool
+  web
+  doc
+  note
+  link
+
+  @@map("item_type")
+}
+
+enum ItemStatus {
+  active
+  draft
+  archived
+
+  @@map("item_status")
+}
+
+model User {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username           String   @unique // luôn lowercase (CHECK trong migration)
+  displayName        String?  @map("display_name")
+  passwordHash       String   @map("password_hash") // argon2id
+  mustChangePassword Boolean  @default(true) @map("must_change_password")
+  role               UserRole @default(user)
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions     Session[]
+  items        Item[]     @relation("ItemCreatedBy")
+  files        File[]
+  noteVersions NoteVersion[]
+  auditLogs    AuditLog[]
+
+  @@map("user")
+}
+
+model Session {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  tokenHash  String   @unique @map("token_hash") // sha256 hex của token trong cookie; không lưu token thô
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  ip         String?
+  userAgent  String?  @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("session")
+}
+
+// Phục vụ rate limit: đếm số lần thất bại theo username / ip trong cửa sổ thời gian.
+model LoginAttempt {
+  id        BigInt   @id @default(autoincrement())
+  username  String // đã lowercase; có thể là tên không tồn tại
+  ip        String
+  success   Boolean
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([username, createdAt])
+  @@index([ip, createdAt])
+  @@index([createdAt])
+  @@map("login_attempt")
+}
+
+model Topic {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentId    String?  @map("parent_id") @db.Uuid
+  slug        String
+  name        String
+  description String?
+  icon        String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent   Topic?  @relation("TopicTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Topic[] @relation("TopicTree")
+  items    Item[]
+
+  // Duy nhất theo cha (parent không NULL). Topic gốc: partial unique index trong migration.
+  @@unique([parentId, slug])
+  @@index([parentId, sortOrder])
+  @@map("topic")
+}
+
+model Item {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  topicId     String?    @map("topic_id") @db.Uuid // NULL = "chưa phân loại"
+  type        ItemType
+  title       String
+  description String?
+  url         String?
+  icon        String?
+  status      ItemStatus @default(active)
+  sortOrder   Int        @default(0) @map("sort_order")
+  createdById String?    @map("created_by_id") @db.Uuid
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  // tsvector GENERATED (unaccent, title=A, description=B) + GIN: tạo trong migration.
+  search      Unsupported("tsvector")?
+
+  topic     Topic?    @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  createdBy User?     @relation("ItemCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  tags      ItemTag[]
+  files     File[]
+  note      Note?
+
+  @@index([topicId, sortOrder])
+  @@index([type])
+  @@index([status])
+  @@index([createdById])
+  @@index([search], type: Gin)
+  @@map("item")
+}
+
+model Tag {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  items ItemTag[]
+
+  @@map("tag")
+}
+
+model ItemTag {
+  itemId String @map("item_id") @db.Uuid
+  tagId  String @map("tag_id") @db.Uuid
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
+  @@index([tagId])
+  @@map("item_tag")
+}
+
+model File {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId       String   @map("item_id") @db.Uuid
+  storageKey   String   @unique @map("storage_key") // đường dẫn tương đối dưới UPLOAD_DIR
+  originalName String   @map("original_name")
+  mime         String
+  size         BigInt
+  sha256       String   @db.Char(64)
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  item       Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([itemId])
+  @@index([sha256])
+  @@map("file")
+}
+
+model Note {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId         String   @unique @map("item_id") @db.Uuid
+  bodyMd         String   @default("") @map("body_md")
+  currentVersion Int      @default(1) @map("current_version")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  // tsvector GENERATED từ body_md + GIN: tạo trong migration.
+  search         Unsupported("tsvector")?
+
+  item     Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  versions NoteVersion[]
+
+  @@index([search], type: Gin)
+  @@map("note")
+}
+
+model NoteVersion {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  noteId      String   @map("note_id") @db.Uuid
+  version     Int
+  bodyMd      String   @map("body_md")
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  note      Note  @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([noteId, version])
+  @@index([createdById])
+  @@map("note_version")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String // vd: item.create, topic.delete, auth.login
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id") // text: giữ được log sau khi thực thể bị xoá
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_log")
+}
